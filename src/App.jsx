@@ -28,8 +28,6 @@ import {
   ChevronLeft,
   ChevronDown,
   ChevronUp,
-  Layers,
-  Sparkles,
   Edit3,
   X,
   Check,
@@ -540,23 +538,13 @@ function BoardApp() {
         <div className="absolute inset-0 bg-slate-950/35 backdrop-blur-[0.5px]"></div>
         
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-4 text-center md:text-left">
-            <div className="p-3 bg-black/40 rounded-xl backdrop-blur-md border border-white/30 shadow-lg">
-              <Layers className="w-8 h-8 text-sky-300 drop-shadow" />
-            </div>
-            <div>
-              <div className="flex items-center justify-center md:justify-start gap-2">
-                <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
-                  {t('appName')}
-                </h1>
-                <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-0.5 rounded-full bg-slate-950/60 text-sky-300 border border-sky-400/50 backdrop-blur-sm shadow-sm">
-                  <Sparkles className="w-3 h-3" /> {t('communityBoard')}
-                </span>
-              </div>
-              <p className="text-sm md:text-base text-white/90 font-medium mt-1 max-w-xl drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)]">
-                {t('appDescription')}
-              </p>
-            </div>
+          <div className="text-center md:text-left">
+            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
+              {t('appName')}
+            </h1>
+            <p className="text-sm md:text-base text-white/90 font-medium mt-1 max-w-xl drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)]">
+              {t('appDescription')}
+            </p>
           </div>
 
           <div className="flex flex-wrap items-center justify-center md:justify-end gap-3">
