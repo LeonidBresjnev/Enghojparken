@@ -470,8 +470,8 @@ describe('Scrumboard Tests with Mock Data', () => {
     expect(screen.getByText('Forbered generalforsamling')).toBeInTheDocument()
     expect(screen.getByText('Udsend dagsorden og indkaldelse 14 dage før.')).toBeInTheDocument()
 
-    // Find collapse button for To Do / Backlog column
-    const todoCollapseBtn = screen.getByRole('button', { name: /fold to do \/ backlog sammen/i })
+    // Find collapse button for Kommende opgaver column
+    const todoCollapseBtn = screen.getByRole('button', { name: /fold kommende opgaver sammen/i })
     expect(todoCollapseBtn).toBeInTheDocument()
 
     // Click collapse button
@@ -493,19 +493,19 @@ describe('Scrumboard Tests with Mock Data', () => {
     await user.click(cancelBtn)
 
     // Expand the column back
-    const todoExpandBtn = screen.getByRole('button', { name: /udvid to do \/ backlog/i })
+    const todoExpandBtn = screen.getByRole('button', { name: /udvid kommende opgaver/i })
     await user.click(todoExpandBtn)
 
     // Description is visible again
     expect(screen.getByText('Udsend dagsorden og indkaldelse 14 dage før.')).toBeInTheDocument()
 
-    // In Progress and Done buckets can also be collapsed independently
-    const inProgressCollapseBtn = screen.getByRole('button', { name: /fold in progress sammen/i })
+    // Igangværende and Færdiggjort buckets can also be collapsed independently
+    const inProgressCollapseBtn = screen.getByRole('button', { name: /fold igangværende sammen/i })
     await user.click(inProgressCollapseBtn)
     expect(screen.getByText('Gennemgå årsregnskab')).toBeInTheDocument()
     expect(screen.queryByText('Tjek bilag og stem overens med bankkonto.')).not.toBeInTheDocument()
 
-    const doneCollapseBtn = screen.getByRole('button', { name: /fold done sammen/i })
+    const doneCollapseBtn = screen.getByRole('button', { name: /fold færdiggjort sammen/i })
     await user.click(doneCollapseBtn)
     expect(screen.getByText('Bestil havemand til forårsrengøring')).toBeInTheDocument()
     expect(screen.queryByText('Hækklipning og rensning af tagrender.')).not.toBeInTheDocument()
@@ -608,25 +608,25 @@ describe('Scrumboard Tests with Mock Data', () => {
     const tablist = screen.getByRole('tablist', { name: /opgavestatus kolonner/i })
     expect(tablist).toBeInTheDocument()
 
-    // 3 tabs: To Do / Backlog, In Progress, Done
+    // 3 tabs: Kommende opgaver, Igangværende, Færdiggjort
     const tabs = within(tablist).getAllByRole('tab')
     expect(tabs.length).toBe(3)
 
-    const todoTab = within(tablist).getByRole('tab', { name: /to do \/ backlog/i })
-    const inProgressTab = within(tablist).getByRole('tab', { name: /in progress/i })
-    const doneTab = within(tablist).getByRole('tab', { name: /done/i })
+    const todoTab = within(tablist).getByRole('tab', { name: /kommende opgaver/i })
+    const inProgressTab = within(tablist).getByRole('tab', { name: /igangværende/i })
+    const doneTab = within(tablist).getByRole('tab', { name: /færdiggjort/i })
 
-    // By default, To Do / Backlog tab is active
+    // By default, Kommende opgaver tab is active
     expect(todoTab).toHaveAttribute('aria-selected', 'true')
     expect(inProgressTab).toHaveAttribute('aria-selected', 'false')
     expect(doneTab).toHaveAttribute('aria-selected', 'false')
 
-    // Click In Progress tab
+    // Click Igangværende tab
     await user.click(inProgressTab)
     expect(inProgressTab).toHaveAttribute('aria-selected', 'true')
     expect(todoTab).toHaveAttribute('aria-selected', 'false')
 
-    // Click Done tab
+    // Click Færdiggjort tab
     await user.click(doneTab)
     expect(doneTab).toHaveAttribute('aria-selected', 'true')
     expect(inProgressTab).toHaveAttribute('aria-selected', 'false')
@@ -636,7 +636,7 @@ describe('Scrumboard Tests with Mock Data', () => {
     render(<App />)
 
     const tablist = screen.getByRole('tablist', { name: /opgavestatus kolonner/i })
-    const inProgressTab = within(tablist).getByRole('tab', { name: /in progress/i })
+    const inProgressTab = within(tablist).getByRole('tab', { name: /igangværende/i })
 
     // Simulate drag and drop of card-1 ('todo') onto In Progress tab
     const mockDataTransfer = {

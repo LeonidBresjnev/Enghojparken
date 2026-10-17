@@ -41,9 +41,9 @@ import {
 } from 'lucide-react'
 
 const INITIAL_COLUMNS = [
-  { id: 'todo', title: 'To Do / Backlog', color: 'border-amber-400', badgeBg: 'bg-amber-100 text-amber-800' },
-  { id: 'in_progress', title: 'In Progress', color: 'border-blue-500', badgeBg: 'bg-blue-100 text-blue-800' },
-  { id: 'done', title: 'Done', color: 'border-emerald-500', badgeBg: 'bg-emerald-100 text-emerald-800' },
+  { id: 'todo', title: 'Kommende opgaver', color: 'border-amber-400', badgeBg: 'bg-amber-100 text-amber-800' },
+  { id: 'in_progress', title: 'Igangværende', color: 'border-blue-500', badgeBg: 'bg-blue-100 text-blue-800' },
+  { id: 'done', title: 'Færdiggjort', color: 'border-emerald-500', badgeBg: 'bg-emerald-100 text-emerald-800' },
 ]
 
 // Helper to normalize assignees from card (handles string or array for backwards compatibility)
@@ -1083,9 +1083,9 @@ export default function App() {
                     onChange={(e) => setEditingCard({ ...editingCard, columnId: e.target.value })}
                     className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
                   >
-                    <option value="todo">To Do</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="done">Done</option>
+                    <option value="todo">Kommende opgaver</option>
+                    <option value="in_progress">Igangværende</option>
+                    <option value="done">Færdiggjort</option>
                   </select>
                 </div>
 
@@ -1213,9 +1213,9 @@ export default function App() {
                     onChange={(e) => setNewCard({ ...newCard, columnId: e.target.value })}
                     className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
                   >
-                    <option value="todo">To Do</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="done">Done</option>
+                    <option value="todo">Kommende opgaver</option>
+                    <option value="in_progress">Igangværende</option>
+                    <option value="done">Færdiggjort</option>
                   </select>
                 </div>
 
