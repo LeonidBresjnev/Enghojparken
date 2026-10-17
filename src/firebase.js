@@ -22,16 +22,7 @@ import {
   orderBy,
   serverTimestamp
 } from "firebase/firestore";
-
-// Your web app's Firebase configuration
-const firebaseConfig = {
-  apiKey: "AIzaSyAadJ4Q_kWn6BYZhgx5hfiK51NfJC0YQ5c",
-  authDomain: "enghojparken.firebaseapp.com",
-  projectId: "enghojparken",
-  storageBucket: "enghojparken.firebasestorage.app",
-  messagingSenderId: "194703680160",
-  appId: "1:194703680160:web:ab3bf447d4b155940e1fc5"
-};
+import { firebaseConfig } from "./secrets";
 
 // Initialize Firebase
 export const app = initializeApp(firebaseConfig);
