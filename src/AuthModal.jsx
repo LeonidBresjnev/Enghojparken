@@ -139,32 +139,32 @@ export default function AuthModal({ isOpen, onClose }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-150 overflow-y-auto"
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 sm:p-8 border border-slate-200 relative"
+        className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-5 sm:p-8 border border-slate-200 relative my-auto max-h-[92vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+          className="absolute top-3.5 right-3.5 sm:top-4 sm:right-4 text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
           aria-label="Luk"
         >
           <X className="w-5 h-5" />
         </button>
 
-        <div className="mb-6 text-center">
-          <div className="mx-auto w-12 h-12 bg-sky-100 text-sky-600 rounded-2xl flex items-center justify-center mb-3 shadow-inner">
+        <div className="mb-5 sm:mb-6 text-center">
+          <div className="mx-auto w-11 h-11 sm:w-12 sm:h-12 bg-sky-100 text-sky-600 rounded-2xl flex items-center justify-center mb-2.5 sm:mb-3 shadow-inner">
             {isForgot ? (
-              <KeyRound className="w-6 h-6" />
+              <KeyRound className="w-5 h-5 sm:w-6 sm:h-6" />
             ) : isSignUp ? (
-              <UserPlus className="w-6 h-6" />
+              <UserPlus className="w-5 h-5 sm:w-6 sm:h-6" />
             ) : (
-              <LogIn className="w-6 h-6" />
+              <LogIn className="w-5 h-5 sm:w-6 sm:h-6" />
             )}
           </div>
-          <h2 className="text-2xl font-bold text-slate-900">
+          <h2 className="text-xl sm:text-2xl font-bold text-slate-900">
             {isForgot
               ? 'Glemt email eller adgangskode'
               : isSignUp
