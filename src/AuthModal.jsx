@@ -11,8 +11,10 @@ import {
 } from './firebase'
 import { isUserAllowed, getAllowedUser } from './allowedUsers'
 import { LogIn, UserPlus, Mail, Lock, User, AlertCircle, Loader2, X, KeyRound, CheckCircle2, ArrowLeft } from 'lucide-react'
+import { useTranslation } from './i18n'
 
 export default function AuthModal({ isOpen, onClose }) {
+  const { t } = useTranslation()
   const [authMode, setAuthMode] = useState('login') // 'login' | 'signup' | 'forgot'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -29,26 +31,26 @@ export default function AuthModal({ isOpen, onClose }) {
   const getFriendlyErrorMessage = (errorCode) => {
     switch (errorCode) {
       case 'auth/invalid-email':
-        return 'Ugyldig e-mailadresse.'
+        return t('auth.invalidEmail')
       case 'auth/user-disabled':
-        return 'Denne brugerkonto er deaktiveret.'
+        return t('auth.userDisabled')
       case 'auth/user-not-found':
-        return 'Der findes ingen bruger med denne e-mailadresse.'
+        return t('auth.userNotFound')
       case 'auth/wrong-password':
       case 'auth/invalid-credential':
-        return 'Forkert e-mail eller adgangskode.'
+        return t('auth.wrongPassword')
       case 'auth/email-already-in-use':
-        return 'Der findes allerede en bruger med denne e-mail.'
+        return t('auth.emailAlreadyInUse')
       case 'auth/weak-password':
-        return 'Adgangskoden skal være på mindst 6 tegn.'
+        return t('auth.weakPassword')
       case 'auth/popup-closed-by-user':
-        return 'Login med Google blev afbrudt.'
+        return t('auth.popupClosed')
       case 'auth/operation-not-allowed':
-        return 'Denne login-metode er ikke aktiveret i Firebase konsollen.'
+        return t('auth.operationNotAllowed')
       case 'auth/too-many-requests':
-        return 'For mange forsøg. Prøv igen senere.'
+        return t('auth.tooManyRequests')
       default:
-        return 'Der opstod en fejl under login. Prøv igen.'
+        return t('auth.genericError')
     }
   }
 
@@ -60,20 +62,20 @@ export default function AuthModal({ isOpen, onClose }) {
 
     const normalizedEmail = email.trim().toLowerCase()
     if (!normalizedEmail) {
-      setError('Indtast venligst din e-mailadresse.')
+      setError(t('auth.enterEmailPrompt'))
       setLoading(false)
       return
     }
 
     if (!isUserAllowed(normalizedEmail)) {
-      setError('Adgang nægtet. Denne e-mailadresse er ikke godkendt til at logge ind.')
+      setError(t('auth.notWhitelistedError'))
       setLoading(false)
       return
     }
 
     try {
       await sendPasswordResetEmail(auth, normalizedEmail)
-      setSuccessMessage(`Vi har sendt en e-mail til ${normalizedEmail} med instruktioner til nulstilling af adgangskode. Tjek din indbakke.`)
+      setSuccessMessage(t('auth.resetPasswordSuccess', { email: normalizedEmail }))
     } catch (err) {
       console.error('Password reset error:', err)
       setError(getFriendlyErrorMessage(err.code || err.message))
@@ -90,7 +92,7 @@ export default function AuthModal({ isOpen, onClose }) {
 
     const normalizedEmail = email.trim().toLowerCase()
     if (!isUserAllowed(normalizedEmail)) {
-      setError('Adgang nægtet. Denne e-mailadresse er ikke godkendt til at logge ind.')
+      setError(t('auth.notWhitelistedError'))
       setLoading(false)
       return
     }
@@ -149,7 +151,7 @@ export default function AuthModal({ isOpen, onClose }) {
         <button
           onClick={onClose}
           className="absolute top-3.5 right-3.5 sm:top-4 sm:right-4 text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
-          aria-label="Luk"
+          aria-label={t('cancel')}
         >
           <X className="w-5 h-5" />
         </button>
@@ -166,17 +168,17 @@ export default function AuthModal({ isOpen, onClose }) {
           </div>
           <h2 className="text-xl sm:text-2xl font-bold text-slate-900">
             {isForgot
-              ? 'Glemt email eller adgangskode'
+              ? t('auth.modalForgotTitle')
               : isSignUp
-              ? 'Opret Bestyrelseskonto'
-              : 'Log ind på Scrumboard'}
+              ? t('auth.modalSignupTitle')
+              : t('auth.modalLoginTitle')}
           </h2>
           <p className="text-xs sm:text-sm text-slate-500 mt-1">
             {isForgot
-              ? 'Indtast din e-mail for at modtage et link til at nulstille din adgangskode via Firebase'
+              ? t('auth.modalForgotSubtitle')
               : isSignUp
-              ? 'Opret en bruger med din e-mail eller Google for at deltage'
-              : 'Få adgang til bestyrelsens opgaver og opdateringer'}
+              ? t('auth.modalSignupSubtitle')
+              : t('auth.modalLoginSubtitle')}
           </p>
         </div>
 
@@ -198,13 +200,13 @@ export default function AuthModal({ isOpen, onClose }) {
           <div>
             <form onSubmit={handleResetPassword} className="space-y-3.5">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">E-mailadresse</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">{t('auth.emailLabel')}</label>
                 <div className="relative">
                   <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
                     type="email"
                     required
-                    placeholder="din@email.dk"
+                    placeholder={t('auth.emailPlaceholder')}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
@@ -222,7 +224,7 @@ export default function AuthModal({ isOpen, onClose }) {
                 ) : (
                   <>
                     <Mail className="w-4 h-4" />
-                    Send nulstillingsmail
+                    {t('auth.forgotSubmitButton')}
                   </>
                 )}
               </button>
@@ -239,7 +241,7 @@ export default function AuthModal({ isOpen, onClose }) {
                 className="inline-flex items-center gap-1.5 text-xs font-semibold text-sky-600 hover:underline cursor-pointer"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
-                Tilbage til login
+                {t('auth.backToLogin')}
               </button>
             </div>
           </div>
@@ -270,24 +272,24 @@ export default function AuthModal({ isOpen, onClose }) {
                   d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
                 />
               </svg>
-              Fortsæt med Google
+              {t('auth.googleSignIn')}
             </button>
 
             <div className="relative flex items-center justify-center my-4">
               <div className="border-t border-slate-200 w-full"></div>
-              <span className="bg-white px-3 text-xs text-slate-400 uppercase tracking-wider font-medium">eller e-mail</span>
+              <span className="bg-white px-3 text-xs text-slate-400 uppercase tracking-wider font-medium">{t('auth.orWithEmail')}</span>
               <div className="border-t border-slate-200 w-full"></div>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-3.5">
               {isSignUp && (
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Fulde navn</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">{t('auth.fullNameLabel')}</label>
                   <div className="relative">
                     <User className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
                       type="text"
-                      placeholder="f.eks. Jacob Hansen"
+                      placeholder={t('auth.fullNamePlaceholder')}
                       value={displayName}
                       onChange={(e) => setDisplayName(e.target.value)}
                       className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
@@ -297,13 +299,13 @@ export default function AuthModal({ isOpen, onClose }) {
               )}
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">E-mailadresse</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">{t('auth.emailLabel')}</label>
                 <div className="relative">
                   <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
                     type="email"
                     required
-                    placeholder="din@email.dk"
+                    placeholder={t('auth.emailPlaceholder')}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
@@ -313,7 +315,7 @@ export default function AuthModal({ isOpen, onClose }) {
 
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-semibold text-slate-700">Adgangskode</label>
+                  <label className="block text-xs font-semibold text-slate-700">{t('auth.passwordLabel')}</label>
                   {!isSignUp && (
                     <button
                       type="button"
@@ -324,7 +326,7 @@ export default function AuthModal({ isOpen, onClose }) {
                       }}
                       className="text-xs text-sky-600 hover:underline cursor-pointer"
                     >
-                      Glemt email?
+                      {t('auth.forgotPasswordLink')}
                     </button>
                   )}
                 </div>
@@ -333,7 +335,7 @@ export default function AuthModal({ isOpen, onClose }) {
                   <input
                     type="password"
                     required
-                    placeholder="••••••••"
+                    placeholder={t('auth.passwordPlaceholder')}
                     minLength={6}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -352,12 +354,12 @@ export default function AuthModal({ isOpen, onClose }) {
                 ) : isSignUp ? (
                   <>
                     <UserPlus className="w-4 h-4" />
-                    Opret konto
+                    {t('auth.signupSubmitButton')}
                   </>
                 ) : (
                   <>
                     <LogIn className="w-4 h-4" />
-                    Log ind
+                    {t('auth.loginSubmitButton')}
                   </>
                 )}
               </button>
@@ -366,7 +368,7 @@ export default function AuthModal({ isOpen, onClose }) {
             <div className="mt-5 text-center text-xs text-slate-500">
               {isSignUp ? (
                 <p>
-                  Har du allerede en konto?{' '}
+                  {t('auth.haveAccountPrompt')}{' '}
                   <button
                     type="button"
                     onClick={() => {
@@ -376,12 +378,12 @@ export default function AuthModal({ isOpen, onClose }) {
                     }}
                     className="text-sky-600 font-semibold hover:underline cursor-pointer"
                   >
-                    Log ind her
+                    {t('auth.loginLink')}
                   </button>
                 </p>
               ) : (
                 <p>
-                  Har du ikke en konto endnu?{' '}
+                  {t('auth.noAccountPrompt')}{' '}
                   <button
                     type="button"
                     onClick={() => {
@@ -391,7 +393,7 @@ export default function AuthModal({ isOpen, onClose }) {
                     }}
                     className="text-sky-600 font-semibold hover:underline cursor-pointer"
                   >
-                    Opret konto
+                    {t('auth.createAccountLink')}
                   </button>
                 </p>
               )}

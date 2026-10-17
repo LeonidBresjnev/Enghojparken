@@ -17,6 +17,8 @@ import {
 } from './firebase'
 import { isUserAllowed, getAllowedUser, getAllowedUserNames } from './allowedUsers'
 import AuthModal from './AuthModal'
+import { I18nProvider, useTranslation } from './i18n'
+import LanguageSelector from './components/LanguageSelector'
 import {
   Plus,
   Trash2,
@@ -40,19 +42,13 @@ import {
   ShieldCheck
 } from 'lucide-react'
 
-const INITIAL_COLUMNS = [
-  { id: 'todo', title: 'Kommende opgaver', color: 'border-amber-400', badgeBg: 'bg-amber-100 text-amber-800' },
-  { id: 'in_progress', title: 'Igangværende', color: 'border-blue-500', badgeBg: 'bg-blue-100 text-blue-800' },
-  { id: 'done', title: 'Færdiggjort', color: 'border-emerald-500', badgeBg: 'bg-emerald-100 text-emerald-800' },
-]
-
 // Helper to normalize assignees from card (handles string or array for backwards compatibility)
 function getCardAssignees(card) {
   if (!card) return []
   if (Array.isArray(card.assignees)) return card.assignees
   if (Array.isArray(card.assignee)) return card.assignee
   if (typeof card.assignee === 'string' && card.assignee.trim()) {
-    if (card.assignee === 'Udefineret') return []
+    if (card.assignee === 'Udefineret' || card.assignee === 'Unassigned') return []
     // Support comma-separated strings if any exist
     return card.assignee.split(',').map((s) => s.trim()).filter(Boolean)
   }
@@ -61,6 +57,7 @@ function getCardAssignees(card) {
 
 // Multi-select Dropdown Component with Checkmarks for Board Members
 function AssigneeDropdown({ boardMembers, selectedAssignees, onChange }) {
+  const { t } = useTranslation()
   const [isOpen, setIsOpen] = useState(false)
   const dropdownRef = useRef(null)
 
@@ -96,7 +93,7 @@ function AssigneeDropdown({ boardMembers, selectedAssignees, onChange }) {
         <div className="flex items-center gap-2 overflow-hidden mr-2">
           <Users className="w-4 h-4 text-slate-400 shrink-0" />
           {selectedCount === 0 ? (
-            <span className="text-slate-400 italic">Vælg ansvarlige...</span>
+            <span className="text-slate-400 italic">{t('assignee.selectPlaceholder')}</span>
           ) : (
             <div className="flex flex-wrap gap-1 items-center">
               {selectedAssignees.slice(0, 2).map((m, idx) => (
@@ -109,7 +106,7 @@ function AssigneeDropdown({ boardMembers, selectedAssignees, onChange }) {
               ))}
               {selectedCount > 2 && (
                 <span className="bg-slate-100 text-slate-600 text-xs px-1.5 py-0.5 rounded-md font-medium">
-                  +{selectedCount - 2} flere
+                  {t('assignee.moreCount', { count: selectedCount - 2 })}
                 </span>
               )}
             </div>
@@ -125,14 +122,14 @@ function AssigneeDropdown({ boardMembers, selectedAssignees, onChange }) {
       {isOpen && (
         <div className="absolute z-60 left-0 right-0 mt-1.5 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden py-1.5 animate-in fade-in-50 zoom-in-95 duration-100">
           <div className="px-3 py-1.5 border-b border-slate-100 flex items-center justify-between text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-            <span>Bestyrelsesmedlemmer</span>
+            <span>{t('assignee.boardMembersTitle')}</span>
             {selectedCount > 0 && (
               <button
                 type="button"
                 onClick={() => onChange([])}
                 className="text-sky-600 hover:text-sky-800 font-normal normal-case cursor-pointer"
               >
-                Fravælg alle
+                {t('assignee.deselectAll')}
               </button>
             )}
           </div>
@@ -165,7 +162,7 @@ function AssigneeDropdown({ boardMembers, selectedAssignees, onChange }) {
                   </div>
                   {isSelected && (
                     <span className="text-[10px] text-sky-600 font-semibold bg-sky-100/80 px-1.5 py-0.5 rounded shrink-0">
-                      Valgt
+                      {t('assignee.selectedBadge')}
                     </span>
                   )}
                 </button>
@@ -227,7 +224,8 @@ const renderDescriptionWithLinks = (text) => {
   return parts
 }
 
-export default function App() {
+function BoardApp() {
+  const { t } = useTranslation()
   const [currentUser, setCurrentUser] = useState(null)
   const [authLoading, setAuthLoading] = useState(true)
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
@@ -244,6 +242,21 @@ export default function App() {
   const [dragOverColId, setDragOverColId] = useState(null)
   const [collapsedColumns, setCollapsedColumns] = useState({})
   const [activeMobileTab, setActiveMobileTab] = useState('todo')
+
+  const columns = useMemo(() => [
+    { id: 'todo', title: t('columns.todo'), color: 'border-amber-400', badgeBg: 'bg-amber-100 text-amber-800' },
+    { id: 'in_progress', title: t('columns.in_progress'), color: 'border-blue-500', badgeBg: 'bg-blue-100 text-blue-800' },
+    { id: 'done', title: t('columns.done'), color: 'border-emerald-500', badgeBg: 'bg-emerald-100 text-emerald-800' },
+  ], [t])
+
+  const [newCard, setNewCard] = useState({
+    title: '',
+    description: '',
+    columnId: 'todo',
+    assignees: [],
+    priority: 'Medium',
+    dueDate: '',
+  })
 
   const toggleColumnCollapse = (columnId) => {
     setCollapsedColumns((prev) => ({
@@ -315,29 +328,26 @@ export default function App() {
       await signOut(auth)
       setCurrentUser(null)
       setCards([])
-      setLoadingCards(false)
-      setFirestoreError(null)
-      setAccessDeniedError('')
     } catch (err) {
       console.error('Sign out error:', err)
     }
   }
 
-  const [newCard, setNewCard] = useState({
-    title: '',
-    description: '',
-    columnId: 'todo',
-    assignees: [],
-    priority: 'Medium',
-    dueDate: '',
-  })
-
+  // Helper to normalize priority values for comparison and display
   const normalizePriority = (p) => {
     if (!p) return 'Medium'
     const lower = p.toLowerCase()
     if (lower === 'high' || lower === 'høj') return 'High'
     if (lower === 'medium' || lower === 'mellem') return 'Medium'
     if (lower === 'low' || lower === 'lav') return 'Low'
+    return p
+  }
+
+  const getPriorityDisplayLabel = (p) => {
+    const norm = normalizePriority(p)
+    if (norm === 'High') return t('priority.high')
+    if (norm === 'Medium') return t('priority.medium')
+    if (norm === 'Low') return t('priority.low')
     return p
   }
 
@@ -504,7 +514,8 @@ export default function App() {
   }
 
   const getPriorityBadge = (priority) => {
-    switch (priority) {
+    const norm = normalizePriority(priority)
+    switch (norm) {
       case 'High':
         return 'bg-red-100 text-red-700 border-red-200'
       case 'Medium':
@@ -536,19 +547,22 @@ export default function App() {
             <div>
               <div className="flex items-center justify-center md:justify-start gap-2">
                 <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
-                  Bestyrelsens Scrumboard
+                  {t('appName')}
                 </h1>
                 <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-0.5 rounded-full bg-slate-950/60 text-sky-300 border border-sky-400/50 backdrop-blur-sm shadow-sm">
-                  <Sparkles className="w-3 h-3" /> Community Board
+                  <Sparkles className="w-3 h-3" /> {t('communityBoard')}
                 </span>
               </div>
               <p className="text-sm md:text-base text-white/90 font-medium mt-1 max-w-xl drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)]">
-                Organisering og overblik over foreningens opgaver, initiativer og bestyrelsesarbejde.
+                {t('appDescription')}
               </p>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center justify-center md:justify-end gap-3">
+            {/* Language Selector in Header */}
+            <LanguageSelector />
+
             {currentUser ? (
               <div className="flex items-center gap-2 bg-slate-900/80 backdrop-blur-md border border-slate-700/80 rounded-xl px-3 py-1.5 shadow-lg">
                 {currentUser.photoURL ? (
@@ -573,7 +587,7 @@ export default function App() {
                 <button
                   onClick={handleSignOut}
                   className="p-1.5 text-slate-300 hover:text-red-400 hover:bg-slate-800/80 rounded-lg transition-colors cursor-pointer"
-                  title="Log ud"
+                  title={t('auth.logOut')}
                 >
                   <LogOut className="w-4 h-4" />
                 </button>
@@ -584,7 +598,7 @@ export default function App() {
                 className="inline-flex items-center gap-2 px-3.5 py-2.5 bg-slate-900/85 hover:bg-slate-800 text-white font-medium text-sm rounded-lg backdrop-blur-md border border-white/25 shadow-lg hover:shadow-xl transition-all duration-200 cursor-pointer"
               >
                 <LogIn className="w-4 h-4 text-sky-400" />
-                Log ind
+                {t('auth.logIn')}
               </button>
             )}
 
@@ -604,7 +618,7 @@ export default function App() {
                 className="inline-flex items-center gap-2 px-4 py-2.5 bg-sky-600 hover:bg-sky-500 text-white font-medium text-sm rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 cursor-pointer border border-sky-400/40"
               >
                 <Plus className="w-4 h-4" />
-                Opret ny opgave
+                {t('createTask')}
               </button>
             ) : null}
           </div>
@@ -616,7 +630,7 @@ export default function App() {
         {authLoading ? (
           <div className="flex flex-col items-center justify-center min-h-[350px] bg-white rounded-2xl border border-slate-200 p-8 shadow-xs">
             <Loader2 className="w-8 h-8 text-sky-600 animate-spin mb-3" />
-            <p className="text-sm font-medium text-slate-600">Indlæser brugerstatus...</p>
+            <p className="text-sm font-medium text-slate-600">{t('loadingUserStatus')}</p>
           </div>
         ) : !currentUser ? (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 md:p-12 text-center max-w-2xl mx-auto my-8">
@@ -624,7 +638,7 @@ export default function App() {
               <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3 text-red-800 text-sm shadow-xs text-left">
                 <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
                 <div className="flex-1">
-                  <h4 className="font-semibold text-red-900 mb-0.5">Adgang nægtet</h4>
+                  <h4 className="font-semibold text-red-900 mb-0.5">{t('auth.accessDenied')}</h4>
                   <p className="text-red-800/90 text-xs sm:text-sm">{accessDeniedError}</p>
                 </div>
               </div>
@@ -633,10 +647,10 @@ export default function App() {
               <Lock className="w-8 h-8" />
             </div>
             <h2 className="text-2xl font-bold text-slate-900 mb-2">
-              Log ind for at se bestyrelsens overblik
+              {t('auth.loginHeaderTitle')}
             </h2>
             <p className="text-sm text-slate-600 max-w-md mx-auto mb-6 leading-relaxed">
-              For at beskytte foreningens opgaver og bestyrelsesarbejde skal du logge ind med din brugerkonto, før opgaver og overblik indlæses.
+              {t('auth.loginHeaderDescription')}
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
               <button
@@ -644,17 +658,17 @@ export default function App() {
                 className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 bg-sky-600 hover:bg-sky-500 text-white font-medium text-sm rounded-xl shadow-md hover:shadow-lg transition-all duration-200 cursor-pointer"
               >
                 <LogIn className="w-4 h-4" />
-                Log ind på bestyrelsesportalen
+                {t('auth.loginPortalButton')}
               </button>
             </div>
             <div className="mt-8 pt-6 border-t border-slate-100 flex items-center justify-center gap-6 text-xs text-slate-400">
               <div className="flex items-center gap-1.5">
                 <ShieldCheck className="w-4 h-4 text-emerald-500" />
-                <span>Sikker adgangsstyring</span>
+                <span>{t('auth.accessControlTitle')}</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <Users className="w-4 h-4 text-sky-500" />
-                <span>Kun for bestyrelsen</span>
+                <span>{t('auth.boardOnlyTitle')}</span>
               </div>
             </div>
           </div>
@@ -664,7 +678,7 @@ export default function App() {
               <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3 text-amber-800 text-sm shadow-xs">
                 <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                 <div className="flex-1">
-                  <h4 className="font-semibold text-amber-900 mb-0.5">Firestore Besked</h4>
+                  <h4 className="font-semibold text-amber-900 mb-0.5">{t('auth.firestoreError')}</h4>
                   <p className="text-amber-800/90 text-xs sm:text-sm">{firestoreError}</p>
                 </div>
               </div>
@@ -677,7 +691,7 @@ export default function App() {
                 <div className="flex items-center gap-2 overflow-x-auto pb-1 max-w-full">
                   <UserIcon className="w-4 h-4 text-slate-400 shrink-0 mr-1" />
                   <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 shrink-0">
-                    Ansvarlig:
+                    {t('assignee.label')}
                   </span>
                   <button
                     onClick={() => setSelectedAssignee('All')}
@@ -687,7 +701,7 @@ export default function App() {
                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                     }`}
                   >
-                    Alle personer
+                    {t('assignee.all')}
                   </button>
                   {boardMembers.map((member) => {
                     const isSelected = selectedAssignee === member
@@ -710,7 +724,7 @@ export default function App() {
                 {/* Priority filter */}
                 <div className="flex items-center gap-2 overflow-x-auto pb-1 max-w-full border-t sm:border-t-0 sm:border-l sm:pl-4 border-slate-200 pt-2 sm:pt-0">
                   <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 shrink-0">
-                    Prioritet:
+                    {t('priority.label')}:
                   </span>
                   <button
                     onClick={() => setSelectedPriority('All')}
@@ -720,12 +734,12 @@ export default function App() {
                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                     }`}
                   >
-                    Alle prioriteter
+                    {t('priority.all')}
                   </button>
                   {[
-                    { value: 'High', label: 'Høj' },
-                    { value: 'Medium', label: 'Mellem' },
-                    { value: 'Low', label: 'Lav' },
+                    { value: 'High', label: t('priority.high') },
+                    { value: 'Medium', label: t('priority.medium') },
+                    { value: 'Low', label: t('priority.low') },
                   ].map((p) => {
                     const isSelected = selectedPriority === p.value
                     return (
@@ -749,12 +763,12 @@ export default function App() {
                 {loadingCards ? (
                   <span className="inline-flex items-center gap-1.5 text-sky-600 font-medium">
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    Synkroniserer med Firestore...
+                    {t('syncingFirestore')}
                   </span>
                 ) : (
                   <>
-                    <span>Træk & slip kort mellem kolonner &bull; Klik for at redigere</span>
-                    <span>Viser <strong>{filteredCards.length}</strong> opgaver</span>
+                    <span>{t('dragAndDropHint')}</span>
+                    <span>{t('showingTasksLabel')} <strong>{filteredCards.length}</strong> {t('tasksWord')}</span>
                   </>
                 )}
               </div>
@@ -764,9 +778,9 @@ export default function App() {
             <div
               className="flex md:hidden items-center p-1 bg-slate-200/80 rounded-xl mb-4 gap-1 shadow-inner border border-slate-300/60"
               role="tablist"
-              aria-label="Opgavestatus kolonner"
+              aria-label={t('mobileTablistAria')}
             >
-              {INITIAL_COLUMNS.map((column) => {
+              {columns.map((column) => {
                 const isSelected = activeMobileTab === column.id
                 const columnCards = filteredCards.filter((card) => card.columnId === column.id)
                 const isOver = dragOverColId === column.id
@@ -779,14 +793,10 @@ export default function App() {
                     aria-selected={isSelected}
                     aria-controls={`panel-${column.id}`}
                     onClick={() => setActiveMobileTab(column.id)}
-                    onDragOver={(e) => {
-                      handleDragOver(e, column.id)
-                      if (activeMobileTab !== column.id) {
-                        setActiveMobileTab(column.id)
-                      }
-                    }}
+                    onDragOver={(e) => handleDragOver(e, column.id)}
+                    onDragLeave={(e) => handleDragLeave(e, column.id)}
                     onDrop={(e) => handleDrop(e, column.id)}
-                    className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 px-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                       isSelected
                         ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
                         : isOver
@@ -805,7 +815,7 @@ export default function App() {
 
             {/* Board Columns: To Do, In Progress, Done */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
-              {INITIAL_COLUMNS.map((column) => {
+              {columns.map((column) => {
                 const columnCards = filteredCards.filter((card) => card.columnId === column.id)
                 const isOver = dragOverColId === column.id
                 const isSelectedOnMobile = activeMobileTab === column.id
@@ -839,8 +849,8 @@ export default function App() {
                         type="button"
                         onClick={() => toggleColumnCollapse(column.id)}
                         className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition-colors cursor-pointer"
-                        title={collapsedColumns[column.id] ? `Udvid ${column.title}` : `Fold ${column.title} sammen`}
-                        aria-label={collapsedColumns[column.id] ? `Udvid ${column.title}` : `Fold ${column.title} sammen`}
+                        title={collapsedColumns[column.id] ? t('expandColumn', { name: column.title }) : t('collapseColumn', { name: column.title })}
+                        aria-label={collapsedColumns[column.id] ? t('expandColumn', { name: column.title }) : t('collapseColumn', { name: column.title })}
                       >
                         {collapsedColumns[column.id] ? (
                           <ChevronDown className="w-4 h-4" />
@@ -860,7 +870,7 @@ export default function App() {
                               isOver ? 'border-sky-400 bg-sky-100/40 text-sky-700' : 'border-slate-200 text-slate-400'
                             }`}
                           >
-                            <p className="text-xs">Ingen opgaver</p>
+                            <p className="text-xs">{t('task.emptyColumn')}</p>
                           </div>
                         ) : (
                           columnCards.map((card, idx) => {
@@ -882,7 +892,7 @@ export default function App() {
                                 className={`bg-white rounded-lg px-3.5 py-2.5 shadow-xs hover:shadow-md transition-all border border-slate-200/90 hover:border-sky-400 cursor-pointer flex items-center justify-between group hover:z-30 hover:-translate-y-0.5 relative ${
                                   isDragging ? 'opacity-40 scale-[0.98] border-dashed border-sky-500' : ''
                                 }`}
-                                title={`${card.title} - Klik for at åbne/redigere`}
+                                title={`${card.title} - ${t('editTask')}`}
                               >
                                 <h3 className="font-semibold text-slate-900 text-sm leading-snug group-hover:text-sky-700 transition-colors flex-1 min-w-0 truncate">
                                   {card.title}
@@ -899,7 +909,7 @@ export default function App() {
                           <div className={`flex-1 flex flex-col items-center justify-center text-center p-6 border-2 border-dashed rounded-lg transition-colors ${
                             isOver ? 'border-sky-400 bg-sky-100/40 text-sky-700' : 'border-slate-200 text-slate-400'
                           }`}>
-                            <p className="text-xs">Slip kort her eller opret en opgave</p>
+                            <p className="text-xs">{t('task.emptyColumn')}</p>
                           </div>
                         ) : (
                           columnCards.map((card) => {
@@ -931,7 +941,7 @@ export default function App() {
                                     {card.title}
                                   </h3>
                                   <span className={`text-[11px] font-medium px-2 py-0.5 rounded border shrink-0 ${getPriorityBadge(card.priority)}`}>
-                                    {card.priority}
+                                    {getPriorityDisplayLabel(card.priority)}
                                   </span>
                                 </div>
 
@@ -943,7 +953,7 @@ export default function App() {
 
                                 <div className="pt-2 border-t border-slate-100 flex flex-col gap-2 text-xs text-slate-500">
                                   <div className="flex items-start justify-between gap-2">
-                                    <div className="flex items-start gap-1.5 flex-1 min-w-0" title="Ansvarlig(e)">
+                                    <div className="flex items-start gap-1.5 flex-1 min-w-0" title={t('assignee.formLabel')}>
                                       <UserIcon className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
                                       <div className="flex flex-wrap gap-1">
                                         {getCardAssignees(card).length > 0 ? (
@@ -956,12 +966,12 @@ export default function App() {
                                             </span>
                                           ))
                                         ) : (
-                                          <span className="font-medium text-slate-400 italic text-[11px]">Udefineret</span>
+                                          <span className="font-medium text-slate-400 italic text-[11px]">{t('assignee.unassigned')}</span>
                                         )}
                                       </div>
                                     </div>
                                     {card.dueDate ? (
-                                      <div className="flex items-center gap-1 text-slate-400 shrink-0" title="Frist">
+                                      <div className="flex items-center gap-1 text-slate-400 shrink-0" title={t('task.dueDate')}>
                                         <Calendar className="w-3.5 h-3.5" />
                                         <span>{card.dueDate}</span>
                                       </div>
@@ -980,7 +990,8 @@ export default function App() {
                                           setCardToDelete(card)
                                         }}
                                         className="text-slate-400 hover:text-red-500 transition-colors p-1 rounded hover:bg-red-50 cursor-pointer"
-                                        title="Slet opgave"
+                                        title={t('deleteTask')}
+                                        aria-label={t('deleteTask')}
                                       >
                                         <Trash2 className="w-3.5 h-3.5" />
                                       </button>
@@ -995,6 +1006,7 @@ export default function App() {
                                           }}
                                           className="p-1 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded transition-colors cursor-pointer"
                                           title="Flyt til forrige kolonne"
+                                          aria-label="Flyt til forrige kolonne"
                                         >
                                           <ChevronLeft className="w-4 h-4" />
                                         </button>
@@ -1007,6 +1019,7 @@ export default function App() {
                                           }}
                                           className="p-1 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded transition-colors cursor-pointer"
                                           title="Flyt til næste kolonne"
+                                          aria-label="Flyt til næste kolonne"
                                         >
                                           <ChevronRight className="w-4 h-4" />
                                         </button>
@@ -1041,11 +1054,12 @@ export default function App() {
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
               <div className="flex items-center gap-2">
                 <Edit3 className="w-5 h-5 text-sky-600" />
-                <h3 className="text-lg font-bold text-slate-900">Rediger opgave</h3>
+                <h3 className="text-lg font-bold text-slate-900">{t('editTask')}</h3>
               </div>
               <button
                 onClick={() => setEditingCard(null)}
                 className="text-slate-400 hover:text-slate-600 p-1 rounded-lg text-sm cursor-pointer"
+                aria-label={t('close')}
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1053,11 +1067,11 @@ export default function App() {
 
             <form onSubmit={handleUpdateCard} className="flex flex-col gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Titel *</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">{t('task.title')}</label>
                 <input
                   type="text"
                   required
-                  placeholder="f.eks. Klargør regnskab til generalforsamling"
+                  placeholder={t('task.titlePlaceholder')}
                   value={editingCard.title}
                   onChange={(e) => setEditingCard({ ...editingCard, title: e.target.value })}
                   className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
@@ -1065,10 +1079,10 @@ export default function App() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Beskrivelse</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">{t('task.description')}</label>
                 <textarea
                   rows={4}
-                  placeholder="Detaljer om opgaven og hvad der skal gøres..."
+                  placeholder={t('task.descriptionPlaceholder')}
                   value={editingCard.description || ''}
                   onChange={(e) => setEditingCard({ ...editingCard, description: e.target.value })}
                   className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 resize-none"
@@ -1077,35 +1091,35 @@ export default function App() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Kolonne / Status</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">{t('task.status')}</label>
                   <select
                     value={editingCard.columnId}
                     onChange={(e) => setEditingCard({ ...editingCard, columnId: e.target.value })}
                     className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
                   >
-                    <option value="todo">Kommende opgaver</option>
-                    <option value="in_progress">Igangværende</option>
-                    <option value="done">Færdiggjort</option>
+                    <option value="todo">{t('columns.todo')}</option>
+                    <option value="in_progress">{t('columns.in_progress')}</option>
+                    <option value="done">{t('columns.done')}</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Prioritet</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">{t('priority.label')}</label>
                   <select
                     value={editingCard.priority}
                     onChange={(e) => setEditingCard({ ...editingCard, priority: e.target.value })}
                     className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
                   >
-                    <option value="Low">Lav</option>
-                    <option value="Medium">Mellem</option>
-                    <option value="High">Høj</option>
+                    <option value="Low">{t('priority.low')}</option>
+                    <option value="Medium">{t('priority.medium')}</option>
+                    <option value="High">{t('priority.high')}</option>
                   </select>
                 </div>
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Ansvarlige (Bestyrelsesmedlemmer)
+                  {t('assignee.formLabel')}
                 </label>
                 <AssigneeDropdown
                   boardMembers={boardMembers}
@@ -1120,7 +1134,7 @@ export default function App() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Frist (Deadline)</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">{t('task.dueDate')}</label>
                 <input
                   type="date"
                   value={editingCard.dueDate || ''}
@@ -1136,7 +1150,7 @@ export default function App() {
                   className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg cursor-pointer transition-colors"
                 >
                   <Trash2 className="w-4 h-4" />
-                  Slet opgave
+                  {t('deleteTask')}
                 </button>
 
                 <div className="flex items-center gap-2">
@@ -1145,14 +1159,14 @@ export default function App() {
                     onClick={() => setEditingCard(null)}
                     className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 rounded-lg hover:bg-slate-100 cursor-pointer"
                   >
-                    Annuller
+                    {t('cancel')}
                   </button>
                   <button
                     type="submit"
                     className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-sky-600 hover:bg-sky-500 rounded-lg shadow-sm cursor-pointer"
                   >
                     <Check className="w-4 h-4" />
-                    Gem ændringer
+                    {t('saveChanges')}
                   </button>
                 </div>
               </div>
@@ -1172,10 +1186,11 @@ export default function App() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
-              <h3 className="text-lg font-bold text-slate-900">Opret ny opgave</h3>
+              <h3 className="text-lg font-bold text-slate-900">{t('createTask')}</h3>
               <button
                 onClick={() => setIsCreateModalOpen(false)}
                 className="text-slate-400 hover:text-slate-600 p-1 rounded-lg text-sm cursor-pointer"
+                aria-label={t('close')}
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1183,11 +1198,11 @@ export default function App() {
 
             <form onSubmit={handleCreateCard} className="flex flex-col gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Titel *</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">{t('task.title')}</label>
                 <input
                   type="text"
                   required
-                  placeholder="f.eks. Klargør regnskab til generalforsamling"
+                  placeholder={t('task.titlePlaceholder')}
                   value={newCard.title}
                   onChange={(e) => setNewCard({ ...newCard, title: e.target.value })}
                   className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
@@ -1195,10 +1210,10 @@ export default function App() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Beskrivelse</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">{t('task.description')}</label>
                 <textarea
                   rows={3}
-                  placeholder="Detaljer om opgaven og hvad der skal gøres..."
+                  placeholder={t('task.descriptionPlaceholder')}
                   value={newCard.description}
                   onChange={(e) => setNewCard({ ...newCard, description: e.target.value })}
                   className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 resize-none"
@@ -1207,35 +1222,35 @@ export default function App() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Kolonne / Status</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">{t('task.status')}</label>
                   <select
                     value={newCard.columnId}
                     onChange={(e) => setNewCard({ ...newCard, columnId: e.target.value })}
                     className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
                   >
-                    <option value="todo">Kommende opgaver</option>
-                    <option value="in_progress">Igangværende</option>
-                    <option value="done">Færdiggjort</option>
+                    <option value="todo">{t('columns.todo')}</option>
+                    <option value="in_progress">{t('columns.in_progress')}</option>
+                    <option value="done">{t('columns.done')}</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Prioritet</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">{t('priority.label')}</label>
                   <select
                     value={newCard.priority}
                     onChange={(e) => setNewCard({ ...newCard, priority: e.target.value })}
                     className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
                   >
-                    <option value="Low">Lav</option>
-                    <option value="Medium">Mellem</option>
-                    <option value="High">Høj</option>
+                    <option value="Low">{t('priority.low')}</option>
+                    <option value="Medium">{t('priority.medium')}</option>
+                    <option value="High">{t('priority.high')}</option>
                   </select>
                 </div>
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Ansvarlige (Bestyrelsesmedlemmer)
+                  {t('assignee.formLabel')}
                 </label>
                 <AssigneeDropdown
                   boardMembers={boardMembers}
@@ -1250,7 +1265,7 @@ export default function App() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Frist (Deadline)</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">{t('task.dueDate')}</label>
                 <input
                   type="date"
                   value={newCard.dueDate}
@@ -1265,13 +1280,13 @@ export default function App() {
                   onClick={() => setIsCreateModalOpen(false)}
                   className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 rounded-lg hover:bg-slate-100 cursor-pointer"
                 >
-                  Annuller
+                  {t('cancel')}
                 </button>
                 <button
                   type="submit"
                   className="px-4 py-2 text-sm font-medium text-white bg-sky-600 hover:bg-sky-500 rounded-lg shadow-sm cursor-pointer"
                 >
-                  Tilføj opgave
+                  {t('addTask')}
                 </button>
               </div>
             </form>
@@ -1298,14 +1313,13 @@ export default function App() {
               </div>
               <div>
                 <h3 id="delete-dialog-title" className="text-lg font-bold text-slate-900">
-                  Slet opgave
+                  {t('deleteDialog.title')}
                 </h3>
-                <p className="text-xs text-slate-500">Denne handling kan ikke fortrydes.</p>
+                <p className="text-xs text-slate-500">{t('deleteDialog.warning')}</p>
               </div>
             </div>
             <p className="text-sm text-slate-600 mb-6 leading-relaxed">
-              Er du sikker på, at du vil slette opgaven{' '}
-              <span className="font-semibold text-slate-900">"{cardToDelete.title}"</span>?
+              {t('deleteDialog.confirmQuestion', { title: cardToDelete.title })}
             </p>
             <div className="flex items-center justify-end gap-3">
               <button
@@ -1313,7 +1327,7 @@ export default function App() {
                 onClick={() => setCardToDelete(null)}
                 className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 rounded-lg hover:bg-slate-100 cursor-pointer transition-colors"
               >
-                Annuller
+                {t('cancel')}
               </button>
               <button
                 type="button"
@@ -1324,7 +1338,7 @@ export default function App() {
                 }}
                 className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg shadow-sm cursor-pointer transition-colors"
               >
-                Slet opgave
+                {t('deleteTask')}
               </button>
             </div>
           </div>
@@ -1342,5 +1356,13 @@ export default function App() {
         <p>Foreningens Bestyrelsesportal &bull; Scrumboard til effektiv opgavestyring</p>
       </footer>
     </div>
+  )
+}
+
+export default function App({ initialLanguage } = {}) {
+  return (
+    <I18nProvider initialLanguage={initialLanguage}>
+      <BoardApp />
+    </I18nProvider>
   )
 }

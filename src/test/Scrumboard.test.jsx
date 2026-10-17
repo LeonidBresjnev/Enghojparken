@@ -392,8 +392,8 @@ describe('Scrumboard Tests with Mock Data', () => {
     const headerContainer = titleElement.closest('div')
 
     expect(headerContainer).toBeInTheDocument()
-    // The same line container contains the title and the priority badge
-    expect(within(headerContainer).getByText('High')).toBeInTheDocument()
+    // The same line container contains the title and the priority badge (in Danish default)
+    expect(within(headerContainer).getByText('Høj')).toBeInTheDocument()
   })
 
   it('filters cards by priority and supports combined filtering', async () => {
