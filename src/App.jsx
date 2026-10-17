@@ -15,20 +15,19 @@ import {
   orderBy,
   serverTimestamp
 } from './firebase'
+import { isUserAllowed, getAllowedUser, getAllowedUserNames } from './allowedUsers'
 import AuthModal from './AuthModal'
 import {
   Plus,
   Trash2,
   Calendar,
   User as UserIcon,
-  Tag,
   ChevronRight,
   ChevronLeft,
   ChevronDown,
-  Filter,
+  ChevronUp,
   Layers,
   Sparkles,
-  GripVertical,
   Edit3,
   X,
   Check,
@@ -45,14 +44,6 @@ const INITIAL_COLUMNS = [
   { id: 'todo', title: 'To Do / Backlog', color: 'border-amber-400', badgeBg: 'bg-amber-100 text-amber-800' },
   { id: 'in_progress', title: 'In Progress', color: 'border-blue-500', badgeBg: 'bg-blue-100 text-blue-800' },
   { id: 'done', title: 'Done', color: 'border-emerald-500', badgeBg: 'bg-emerald-100 text-emerald-800' },
-]
-
-// Default predefined board roles
-const DEFAULT_ROLES = [
-  { role: 'Kasserer', isUser: true, fallback: 'Kasserer' },
-  { role: 'Formand', isUser: false, fallback: 'Formand' },
-  { role: 'Næstformand', isUser: false, fallback: 'Næstformand' },
-  { role: 'Suppleant', isUser: false, fallback: 'Suppleant' },
 ]
 
 // Helper to normalize assignees from card (handles string or array for backwards compatibility)
@@ -187,33 +178,102 @@ function AssigneeDropdown({ boardMembers, selectedAssignees, onChange }) {
   )
 }
 
+const renderDescriptionWithLinks = (text) => {
+  if (!text) return null
+  const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi
+  const parts = []
+  let lastIndex = 0
+  let match
+
+  while ((match = urlRegex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index))
+    }
+
+    let url = match[0]
+    let trailingPunctuation = ''
+
+    const punctMatch = url.match(/[.,;:!?]+$/)
+    if (punctMatch) {
+      trailingPunctuation = punctMatch[0]
+      url = url.slice(0, -trailingPunctuation.length)
+    }
+
+    const href = url.startsWith('www.') ? `https://${url}` : url
+    parts.push(
+      <a
+        key={match.index}
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(e) => e.stopPropagation()}
+        className="text-sky-600 hover:text-sky-800 underline break-all font-medium transition-colors"
+      >
+        {url}
+      </a>
+    )
+
+    if (trailingPunctuation) {
+      parts.push(trailingPunctuation)
+    }
+
+    lastIndex = match.index + match[0].length
+  }
+
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex))
+  }
+
+  return parts
+}
+
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null)
   const [authLoading, setAuthLoading] = useState(true)
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
+  const [accessDeniedError, setAccessDeniedError] = useState('')
   const [cards, setCards] = useState([])
   const [loadingCards, setLoadingCards] = useState(false)
   const [firestoreError, setFirestoreError] = useState(null)
-  const [selectedCategory, setSelectedCategory] = useState('All')
+  const [selectedAssignee, setSelectedAssignee] = useState('All')
+  const [selectedPriority, setSelectedPriority] = useState('All')
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [editingCard, setEditingCard] = useState(null)
+  const [cardToDelete, setCardToDelete] = useState(null)
   const [draggedCardId, setDraggedCardId] = useState(null)
   const [dragOverColId, setDragOverColId] = useState(null)
+  const [collapsedColumns, setCollapsedColumns] = useState({})
 
-  // Calculate board members list with roles: Kasserer (registered user), Formand, Næstformand, and Suppleant
+  const toggleColumnCollapse = (columnId) => {
+    setCollapsedColumns((prev) => ({
+      ...prev,
+      [columnId]: !prev[columnId],
+    }))
+  }
+
+  // Use names from users.json as the persons who can be dedicated to a task
   const boardMembers = useMemo(() => {
-    return DEFAULT_ROLES.map((item) => {
-      if (item.isUser && currentUser) {
-        const currentUserName = currentUser.displayName || currentUser.email?.split('@')[0] || 'Bruger'
-        return `${currentUserName} (${item.role})`
-      }
-      return item.fallback
-    })
-  }, [currentUser])
+    return getAllowedUserNames()
+  }, [])
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user)
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        if (isUserAllowed(user.email)) {
+          setCurrentUser(user)
+          setAccessDeniedError('')
+        } else {
+          try {
+            await signOut(auth)
+          } catch (e) {
+            console.error('Error signing out unauthorized user:', e)
+          }
+          setCurrentUser(null)
+          setAccessDeniedError(`Adgang nægtet: E-mailadressen (${user.email || 'ukendt'}) har ikke tilladelse til at logge ind.`)
+        }
+      } else {
+        setCurrentUser(null)
+      }
       setAuthLoading(false)
     })
     return () => unsubscribe()
@@ -252,9 +312,11 @@ export default function App() {
   const handleSignOut = async () => {
     try {
       await signOut(auth)
+      setCurrentUser(null)
       setCards([])
       setLoadingCards(false)
       setFirestoreError(null)
+      setAccessDeniedError('')
     } catch (err) {
       console.error('Sign out error:', err)
     }
@@ -267,14 +329,34 @@ export default function App() {
     assignees: [],
     priority: 'Medium',
     dueDate: '',
-    category: 'General',
   })
 
-  const categories = ['All', ...Array.from(new Set(cards.map((c) => c.category || 'General')))]
+  const normalizePriority = (p) => {
+    if (!p) return 'Medium'
+    const lower = p.toLowerCase()
+    if (lower === 'high' || lower === 'høj') return 'High'
+    if (lower === 'medium' || lower === 'mellem') return 'Medium'
+    if (lower === 'low' || lower === 'lav') return 'Low'
+    return p
+  }
 
-  const filteredCards = selectedCategory === 'All'
-    ? cards
-    : cards.filter((c) => (c.category || 'General') === selectedCategory)
+  const filteredCards = useMemo(() => {
+    return cards.filter((card) => {
+      if (selectedAssignee !== 'All') {
+        const cardAssignees = getCardAssignees(card)
+        const hasMatch = cardAssignees.some(
+          (a) => a === selectedAssignee || a.toLowerCase().includes(selectedAssignee.toLowerCase())
+        )
+        if (!hasMatch) return false
+      }
+      if (selectedPriority !== 'All') {
+        if (normalizePriority(card.priority) !== normalizePriority(selectedPriority)) {
+          return false
+        }
+      }
+      return true
+    })
+  }, [cards, selectedAssignee, selectedPriority])
 
   const moveCard = async (id, direction) => {
     const colOrder = ['todo', 'in_progress', 'done']
@@ -287,7 +369,7 @@ export default function App() {
       const nextColumnId = colOrder[nextIndex]
       try {
         const cardRef = doc(db, 'cards', id)
-        await updateDoc(cardRef, { columnId: nextColumnId })
+        await updateDoc(cardRef, { columnId: nextColumnId, updatedAt: serverTimestamp() })
       } catch (err) {
         console.error('Error moving card:', err)
       }
@@ -321,9 +403,9 @@ export default function App() {
         assignees: selectedAssignees,
         assignee: assigneeString, // maintain backwards compatibility
         priority: newCard.priority || 'Medium',
-        dueDate: newCard.dueDate || new Date().toISOString().split('T')[0],
-        category: newCard.category.trim() || 'General',
+        dueDate: newCard.dueDate ? newCard.dueDate.trim() : '',
         createdAt: serverTimestamp(),
+        timestamp: serverTimestamp(),
       }
 
       await addDoc(collection(db, 'cards'), cardData)
@@ -335,7 +417,6 @@ export default function App() {
         assignees: [],
         priority: 'Medium',
         dueDate: '',
-        category: 'General',
       })
       setIsCreateModalOpen(false)
     } catch (err) {
@@ -362,8 +443,8 @@ export default function App() {
         assignees: selectedAssignees,
         assignee: assigneeString, // maintain backwards compatibility
         priority: editingCard.priority || 'Medium',
-        dueDate: editingCard.dueDate || '',
-        category: editingCard.category?.trim() || 'General',
+        dueDate: editingCard.dueDate ? editingCard.dueDate.trim() : '',
+        updatedAt: serverTimestamp(),
       })
       setEditingCard(null)
     } catch (err) {
@@ -411,7 +492,7 @@ export default function App() {
       if (targetCard && targetCard.columnId !== targetColumnId) {
         try {
           const cardRef = doc(db, 'cards', cardId)
-          await updateDoc(cardRef, { columnId: targetColumnId })
+          await updateDoc(cardRef, { columnId: targetColumnId, updatedAt: serverTimestamp() })
         } catch (err) {
           console.error('Error updating card column on drop:', err)
         }
@@ -480,7 +561,7 @@ export default function App() {
                 )}
                 <div className="flex flex-col text-left mr-1">
                   <span className="text-xs font-semibold text-white leading-tight max-w-[130px] truncate">
-                    {currentUser.displayName || currentUser.email?.split('@')[0]}
+                    {getAllowedUser(currentUser.email)?.name || currentUser.displayName || currentUser.email?.split('@')[0]}
                   </span>
                   <span className="text-[10px] text-slate-300 max-w-[130px] truncate leading-tight">
                     {currentUser.email}
@@ -511,10 +592,9 @@ export default function App() {
                     title: '',
                     description: '',
                     columnId: 'todo',
-                    assignees: boardMembers[0] ? [boardMembers[0]] : [],
+                    assignees: [],
                     priority: 'Medium',
-                    dueDate: new Date().toISOString().split('T')[0],
-                    category: 'General',
+                    dueDate: '',
                   })
                   setIsCreateModalOpen(true)
                 }}
@@ -537,6 +617,15 @@ export default function App() {
           </div>
         ) : !currentUser ? (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 md:p-12 text-center max-w-2xl mx-auto my-8">
+            {accessDeniedError && (
+              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3 text-red-800 text-sm shadow-xs text-left">
+                <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <h4 className="font-semibold text-red-900 mb-0.5">Adgang nægtet</h4>
+                  <p className="text-red-800/90 text-xs sm:text-sm">{accessDeniedError}</p>
+                </div>
+              </div>
+            )}
             <div className="w-16 h-16 bg-sky-50 text-sky-600 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-sky-100 shadow-xs">
               <Lock className="w-8 h-8" />
             </div>
@@ -580,22 +669,77 @@ export default function App() {
 
             {/* Controls & Filter bar */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-6 flex flex-wrap items-center justify-between gap-4">
-              <div className="flex items-center gap-2 overflow-x-auto pb-1 max-w-full">
-                <Filter className="w-4 h-4 text-slate-400 shrink-0 mr-1" />
-                <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 shrink-0">Kategori:</span>
-                {categories.map((cat) => (
+              <div className="flex flex-wrap items-center gap-4 max-w-full">
+                {/* Person filter */}
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 max-w-full">
+                  <UserIcon className="w-4 h-4 text-slate-400 shrink-0 mr-1" />
+                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 shrink-0">
+                    Ansvarlig:
+                  </span>
                   <button
-                    key={cat}
-                    onClick={() => setSelectedCategory(cat)}
+                    onClick={() => setSelectedAssignee('All')}
                     className={`px-3 py-1 text-xs font-medium rounded-full transition-colors cursor-pointer whitespace-nowrap ${
-                      selectedCategory === cat
-                        ? 'bg-slate-900 text-white shadow-sm'
+                      selectedAssignee === 'All'
+                        ? 'bg-sky-600 text-white shadow-sm font-semibold'
                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                     }`}
                   >
-                    {cat}
+                    Alle personer
                   </button>
-                ))}
+                  {boardMembers.map((member) => {
+                    const isSelected = selectedAssignee === member
+                    return (
+                      <button
+                        key={member}
+                        onClick={() => setSelectedAssignee(member)}
+                        className={`px-3 py-1 text-xs font-medium rounded-full transition-colors cursor-pointer whitespace-nowrap ${
+                          isSelected
+                            ? 'bg-sky-600 text-white shadow-sm font-semibold'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                      >
+                        {member}
+                      </button>
+                    )
+                  })}
+                </div>
+
+                {/* Priority filter */}
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 max-w-full border-t sm:border-t-0 sm:border-l sm:pl-4 border-slate-200 pt-2 sm:pt-0">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 shrink-0">
+                    Prioritet:
+                  </span>
+                  <button
+                    onClick={() => setSelectedPriority('All')}
+                    className={`px-3 py-1 text-xs font-medium rounded-full transition-colors cursor-pointer whitespace-nowrap ${
+                      selectedPriority === 'All'
+                        ? 'bg-sky-600 text-white shadow-sm font-semibold'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    Alle prioriteter
+                  </button>
+                  {[
+                    { value: 'High', label: 'Høj' },
+                    { value: 'Medium', label: 'Mellem' },
+                    { value: 'Low', label: 'Lav' },
+                  ].map((p) => {
+                    const isSelected = selectedPriority === p.value
+                    return (
+                      <button
+                        key={p.value}
+                        onClick={() => setSelectedPriority(p.value)}
+                        className={`px-3 py-1 text-xs font-medium rounded-full transition-colors cursor-pointer whitespace-nowrap ${
+                          isSelected
+                            ? 'bg-sky-600 text-white shadow-sm font-semibold'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                      >
+                        {p.label}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
 
               <div className="flex items-center gap-4 text-xs text-slate-500 ml-auto">
@@ -639,154 +783,191 @@ export default function App() {
                           {columnCards.length}
                         </span>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => toggleColumnCollapse(column.id)}
+                        className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition-colors cursor-pointer"
+                        title={collapsedColumns[column.id] ? `Udvid ${column.title}` : `Fold ${column.title} sammen`}
+                        aria-label={collapsedColumns[column.id] ? `Udvid ${column.title}` : `Fold ${column.title} sammen`}
+                      >
+                        {collapsedColumns[column.id] ? (
+                          <ChevronDown className="w-4 h-4" />
+                        ) : (
+                          <ChevronUp className="w-4 h-4" />
+                        )}
+                      </button>
                     </div>
 
                     {/* Cards Container */}
-                    <div className="flex-1 flex flex-col gap-3">
-                      {columnCards.length === 0 ? (
-                        <div className={`flex-1 flex flex-col items-center justify-center text-center p-6 border-2 border-dashed rounded-lg transition-colors ${
-                          isOver ? 'border-sky-400 bg-sky-100/40 text-sky-700' : 'border-slate-200 text-slate-400'
-                        }`}>
-                          <p className="text-xs">Slip kort her eller opret en opgave</p>
-                        </div>
-                      ) : (
-                        columnCards.map((card) => {
-                          const colOrder = ['todo', 'in_progress', 'done']
-                          const currentIndex = colOrder.indexOf(card.columnId)
-                          const canMoveLeft = currentIndex > 0
-                          const canMoveRight = currentIndex < colOrder.length - 1
-                          const isDragging = draggedCardId === card.id
+                    {collapsedColumns[column.id] ? (
+                      /* Collapsed / Stacked View */
+                      <div className="flex-1 flex flex-col -space-y-1.5 py-1">
+                        {columnCards.length === 0 ? (
+                          <div
+                            className={`flex-1 flex flex-col items-center justify-center text-center p-6 border-2 border-dashed rounded-lg transition-colors ${
+                              isOver ? 'border-sky-400 bg-sky-100/40 text-sky-700' : 'border-slate-200 text-slate-400'
+                            }`}
+                          >
+                            <p className="text-xs">Ingen opgaver</p>
+                          </div>
+                        ) : (
+                          columnCards.map((card, idx) => {
+                            const isDragging = draggedCardId === card.id
+                            return (
+                              <div
+                                key={card.id}
+                                draggable
+                                onDragStart={(e) => handleDragStart(e, card.id)}
+                                onDragEnd={handleDragEnd}
+                                onClick={() => {
+                                  const assignees = getCardAssignees(card)
+                                  setEditingCard({
+                                    ...card,
+                                    assignees: assignees.length > 0 ? assignees : [],
+                                  })
+                                }}
+                                style={{ zIndex: columnCards.length - idx }}
+                                className={`bg-white rounded-lg px-3.5 py-2.5 shadow-xs hover:shadow-md transition-all border border-slate-200/90 hover:border-sky-400 cursor-pointer flex items-center justify-between group hover:z-30 hover:-translate-y-0.5 relative ${
+                                  isDragging ? 'opacity-40 scale-[0.98] border-dashed border-sky-500' : ''
+                                }`}
+                                title={`${card.title} - Klik for at åbne/redigere`}
+                              >
+                                <h3 className="font-semibold text-slate-900 text-sm leading-snug group-hover:text-sky-700 transition-colors flex-1 min-w-0 truncate">
+                                  {card.title}
+                                </h3>
+                              </div>
+                            )
+                          })
+                        )}
+                      </div>
+                    ) : (
+                      /* Expanded / Full View */
+                      <div className="flex-1 flex flex-col gap-3">
+                        {columnCards.length === 0 ? (
+                          <div className={`flex-1 flex flex-col items-center justify-center text-center p-6 border-2 border-dashed rounded-lg transition-colors ${
+                            isOver ? 'border-sky-400 bg-sky-100/40 text-sky-700' : 'border-slate-200 text-slate-400'
+                          }`}>
+                            <p className="text-xs">Slip kort her eller opret en opgave</p>
+                          </div>
+                        ) : (
+                          columnCards.map((card) => {
+                            const colOrder = ['todo', 'in_progress', 'done']
+                            const currentIndex = colOrder.indexOf(card.columnId)
+                            const canMoveLeft = currentIndex > 0
+                            const canMoveRight = currentIndex < colOrder.length - 1
+                            const isDragging = draggedCardId === card.id
 
-                          return (
-                            <div
-                              key={card.id}
-                              draggable
-                              onDragStart={(e) => handleDragStart(e, card.id)}
-                              onDragEnd={handleDragEnd}
-                              onClick={() => {
-                                const assignees = getCardAssignees(card)
-                                setEditingCard({
-                                  ...card,
-                                  assignees: assignees.length > 0 ? assignees : [],
-                                })
-                              }}
-                              className={`bg-white rounded-lg p-4 shadow-sm hover:shadow-md transition-all border border-slate-200 flex flex-col gap-3 cursor-pointer group hover:border-sky-300 ${
-                                isDragging ? 'opacity-40 scale-[0.98] border-dashed border-sky-500' : ''
-                              }`}
-                            >
-                              <div className="flex items-start justify-between gap-2">
-                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
-                                  <Tag className="w-3 h-3" />
-                                  {card.category}
-                                </span>
-                                <div className="flex items-center gap-1.5">
-                                  <span className={`text-[11px] font-medium px-2 py-0.5 rounded border ${getPriorityBadge(card.priority)}`}>
+                            return (
+                              <div
+                                key={card.id}
+                                draggable
+                                onDragStart={(e) => handleDragStart(e, card.id)}
+                                onDragEnd={handleDragEnd}
+                                onClick={() => {
+                                  const assignees = getCardAssignees(card)
+                                  setEditingCard({
+                                    ...card,
+                                    assignees: assignees.length > 0 ? assignees : [],
+                                  })
+                                }}
+                                className={`bg-white rounded-lg p-4 shadow-sm hover:shadow-md transition-all border border-slate-200 flex flex-col gap-3 cursor-pointer group hover:border-sky-300 ${
+                                  isDragging ? 'opacity-40 scale-[0.98] border-dashed border-sky-500' : ''
+                                }`}
+                              >
+                                <div className="flex items-start justify-between gap-2">
+                                  <h3 className="font-semibold text-slate-900 text-sm leading-snug group-hover:text-sky-700 transition-colors flex-1 min-w-0">
+                                    {card.title}
+                                  </h3>
+                                  <span className={`text-[11px] font-medium px-2 py-0.5 rounded border shrink-0 ${getPriorityBadge(card.priority)}`}>
                                     {card.priority}
                                   </span>
-                                  <GripVertical className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-500 transition-colors" />
                                 </div>
-                              </div>
 
-                              <h3 className="font-semibold text-slate-900 text-sm leading-snug group-hover:text-sky-700 transition-colors">
-                                {card.title}
-                              </h3>
+                                {card.description && (
+                                  <p className="text-xs text-slate-600 line-clamp-3 leading-relaxed break-words whitespace-pre-line">
+                                    {renderDescriptionWithLinks(card.description)}
+                                  </p>
+                                )}
 
-                              {card.description && (
-                                <p className="text-xs text-slate-600 line-clamp-3 leading-relaxed">
-                                  {card.description}
-                                </p>
-                              )}
+                                <div className="pt-2 border-t border-slate-100 flex flex-col gap-2 text-xs text-slate-500">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="flex items-start gap-1.5 flex-1 min-w-0" title="Ansvarlig(e)">
+                                      <UserIcon className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
+                                      <div className="flex flex-wrap gap-1">
+                                        {getCardAssignees(card).length > 0 ? (
+                                          getCardAssignees(card).map((person, idx) => (
+                                            <span
+                                              key={idx}
+                                              className="font-medium text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded text-[11px] leading-tight"
+                                            >
+                                              {person}
+                                            </span>
+                                          ))
+                                        ) : (
+                                          <span className="font-medium text-slate-400 italic text-[11px]">Udefineret</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                    {card.dueDate ? (
+                                      <div className="flex items-center gap-1 text-slate-400 shrink-0" title="Frist">
+                                        <Calendar className="w-3.5 h-3.5" />
+                                        <span>{card.dueDate}</span>
+                                      </div>
+                                    ) : null}
+                                  </div>
 
-                              <div className="pt-2 border-t border-slate-100 flex flex-col gap-2 text-xs text-slate-500">
-                                <div className="flex items-start justify-between gap-2">
-                                  <div className="flex items-start gap-1.5 flex-1 min-w-0" title="Ansvarlig(e)">
-                                    <UserIcon className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
-                                    <div className="flex flex-wrap gap-1">
-                                      {getCardAssignees(card).length > 0 ? (
-                                        getCardAssignees(card).map((person, idx) => (
-                                          <span
-                                            key={idx}
-                                            className="font-medium text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded text-[11px] leading-tight"
-                                          >
-                                            {person}
-                                          </span>
-                                        ))
-                                      ) : (
-                                        <span className="font-medium text-slate-400 italic text-[11px]">Udefineret</span>
+                                  {/* Card Actions */}
+                                  <div
+                                    className="flex items-center justify-between pt-1"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          setCardToDelete(card)
+                                        }}
+                                        className="text-slate-400 hover:text-red-500 transition-colors p-1 rounded hover:bg-red-50 cursor-pointer"
+                                        title="Slet opgave"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+
+                                    <div className="flex items-center gap-1 ml-auto">
+                                      {canMoveLeft && (
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            moveCard(card.id, 'prev')
+                                          }}
+                                          className="p-1 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded transition-colors cursor-pointer"
+                                          title="Flyt til forrige kolonne"
+                                        >
+                                          <ChevronLeft className="w-4 h-4" />
+                                        </button>
+                                      )}
+                                      {canMoveRight && (
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            moveCard(card.id, 'next')
+                                          }}
+                                          className="p-1 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded transition-colors cursor-pointer"
+                                          title="Flyt til næste kolonne"
+                                        >
+                                          <ChevronRight className="w-4 h-4" />
+                                        </button>
                                       )}
                                     </div>
                                   </div>
-                                  <div className="flex items-center gap-1 text-slate-400 shrink-0" title="Frist">
-                                    <Calendar className="w-3.5 h-3.5" />
-                                    <span>{card.dueDate}</span>
-                                  </div>
-                                </div>
-
-                                {/* Card Actions */}
-                                <div
-                                  className="flex items-center justify-between pt-1"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <div className="flex items-center gap-1">
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        deleteCard(card.id)
-                                      }}
-                                      className="text-slate-400 hover:text-red-500 transition-colors p-1 rounded hover:bg-red-50 cursor-pointer"
-                                      title="Slet opgave"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        const assignees = getCardAssignees(card)
-                                        setEditingCard({
-                                          ...card,
-                                          assignees: assignees.length > 0 ? assignees : [],
-                                        })
-                                      }}
-                                      className="text-slate-400 hover:text-sky-600 transition-colors p-1 rounded hover:bg-sky-50 cursor-pointer"
-                                      title="Rediger opgave"
-                                    >
-                                      <Edit3 className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
-
-                                  <div className="flex items-center gap-1 ml-auto">
-                                    {canMoveLeft && (
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation()
-                                          moveCard(card.id, 'prev')
-                                        }}
-                                        className="p-1 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded transition-colors cursor-pointer"
-                                        title="Flyt til forrige kolonne"
-                                      >
-                                        <ChevronLeft className="w-4 h-4" />
-                                      </button>
-                                    )}
-                                    {canMoveRight && (
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation()
-                                          moveCard(card.id, 'next')
-                                        }}
-                                        className="p-1 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded transition-colors cursor-pointer"
-                                        title="Flyt til næste kolonne"
-                                      >
-                                        <ChevronRight className="w-4 h-4" />
-                                      </button>
-                                    )}
-                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          )
-                        })
-                      )}
-                    </div>
+                            )
+                          })
+                        )}
+                      </div>
+                    )}
                   </div>
                 )
               })}
@@ -886,33 +1067,20 @@ export default function App() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Kategori</label>
-                  <input
-                    type="text"
-                    placeholder="f.eks. Økonomi, Drift, Event"
-                    value={editingCard.category || ''}
-                    onChange={(e) => setEditingCard({ ...editingCard, category: e.target.value })}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Frist (Deadline)</label>
-                  <input
-                    type="date"
-                    value={editingCard.dueDate || ''}
-                    onChange={(e) => setEditingCard({ ...editingCard, dueDate: e.target.value })}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
-                  />
-                </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Frist (Deadline)</label>
+                <input
+                  type="date"
+                  value={editingCard.dueDate || ''}
+                  onChange={(e) => setEditingCard({ ...editingCard, dueDate: e.target.value })}
+                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
+                />
               </div>
 
               <div className="flex items-center justify-between gap-3 mt-3 pt-3 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => deleteCard(editingCard.id)}
+                  onClick={() => setCardToDelete(editingCard)}
                   className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg cursor-pointer transition-colors"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -1029,27 +1197,14 @@ export default function App() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Kategori</label>
-                  <input
-                    type="text"
-                    placeholder="f.eks. Økonomi, Drift, Event"
-                    value={newCard.category}
-                    onChange={(e) => setNewCard({ ...newCard, category: e.target.value })}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Frist (Deadline)</label>
-                  <input
-                    type="date"
-                    value={newCard.dueDate}
-                    onChange={(e) => setNewCard({ ...newCard, dueDate: e.target.value })}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
-                  />
-                </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Frist (Deadline)</label>
+                <input
+                  type="date"
+                  value={newCard.dueDate}
+                  onChange={(e) => setNewCard({ ...newCard, dueDate: e.target.value })}
+                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
+                />
               </div>
 
               <div className="flex items-center justify-end gap-3 mt-3 pt-3 border-t border-slate-100">
@@ -1068,6 +1223,58 @@ export default function App() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      {cardToDelete && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-dialog-title"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/50 backdrop-blur-xs"
+          onClick={() => setCardToDelete(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2.5 bg-red-100 text-red-600 rounded-full shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 id="delete-dialog-title" className="text-lg font-bold text-slate-900">
+                  Slet opgave
+                </h3>
+                <p className="text-xs text-slate-500">Denne handling kan ikke fortrydes.</p>
+              </div>
+            </div>
+            <p className="text-sm text-slate-600 mb-6 leading-relaxed">
+              Er du sikker på, at du vil slette opgaven{' '}
+              <span className="font-semibold text-slate-900">"{cardToDelete.title}"</span>?
+            </p>
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setCardToDelete(null)}
+                className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 rounded-lg hover:bg-slate-100 cursor-pointer transition-colors"
+              >
+                Annuller
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const idToDelete = cardToDelete.id
+                  setCardToDelete(null)
+                  await deleteCard(idToDelete)
+                }}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg shadow-sm cursor-pointer transition-colors"
+              >
+                Slet opgave
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -1,0 +1,22 @@
+[
+  {
+    "name": "Erik Bjerg",
+    "email": "bjerg1@webspeed.dk",
+    "role": "Næstformand"
+  },
+  {
+    "name": "Christoffer Burgess",
+    "email": "christoffer.burgess@hotmail.com",
+    "role": "Formand"
+  },
+  {
+    "name": "Niki Gonzalez",
+    "email": "nikigs.store@gmail.com",
+    "role": "Næstformand"
+  },
+  {
+    "name": "Jacob Simonsen",
+    "email": "leonid.bresjnev@gmail.com",
+    "role": "Kasserer"
+  }
+]
