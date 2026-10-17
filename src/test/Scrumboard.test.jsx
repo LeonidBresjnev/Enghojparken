@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, waitFor, within, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from '../App'
 
@@ -598,5 +598,57 @@ describe('Scrumboard Tests with Mock Data', () => {
     // Clicking the link shouldn't open the edit modal due to stopPropagation
     await user.click(httpsLink)
     expect(screen.queryByRole('heading', { name: /rediger opgave/i })).not.toBeInTheDocument()
+  })
+
+  it('renders horizontal mobile tabs for buckets and supports switching tabs', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    // Mobile tablist should be rendered
+    const tablist = screen.getByRole('tablist', { name: /opgavestatus kolonner/i })
+    expect(tablist).toBeInTheDocument()
+
+    // 3 tabs: To Do / Backlog, In Progress, Done
+    const tabs = within(tablist).getAllByRole('tab')
+    expect(tabs.length).toBe(3)
+
+    const todoTab = within(tablist).getByRole('tab', { name: /to do \/ backlog/i })
+    const inProgressTab = within(tablist).getByRole('tab', { name: /in progress/i })
+    const doneTab = within(tablist).getByRole('tab', { name: /done/i })
+
+    // By default, To Do / Backlog tab is active
+    expect(todoTab).toHaveAttribute('aria-selected', 'true')
+    expect(inProgressTab).toHaveAttribute('aria-selected', 'false')
+    expect(doneTab).toHaveAttribute('aria-selected', 'false')
+
+    // Click In Progress tab
+    await user.click(inProgressTab)
+    expect(inProgressTab).toHaveAttribute('aria-selected', 'true')
+    expect(todoTab).toHaveAttribute('aria-selected', 'false')
+
+    // Click Done tab
+    await user.click(doneTab)
+    expect(doneTab).toHaveAttribute('aria-selected', 'true')
+    expect(inProgressTab).toHaveAttribute('aria-selected', 'false')
+  })
+
+  it('supports drag-and-drop onto mobile tab buttons to move cards between buckets', async () => {
+    render(<App />)
+
+    const tablist = screen.getByRole('tablist', { name: /opgavestatus kolonner/i })
+    const inProgressTab = within(tablist).getByRole('tab', { name: /in progress/i })
+
+    // Simulate drag and drop of card-1 ('todo') onto In Progress tab
+    const mockDataTransfer = {
+      getData: (format) => (format === 'text/plain' ? 'card-1' : ''),
+      dropEffect: 'move',
+    }
+
+    fireEvent.dragOver(inProgressTab, { dataTransfer: mockDataTransfer })
+    fireEvent.drop(inProgressTab, { dataTransfer: mockDataTransfer })
+
+    await waitFor(() => {
+      expect(mockCardsData.find((c) => c.id === 'card-1').columnId).toBe('in_progress')
+    })
   })
 })

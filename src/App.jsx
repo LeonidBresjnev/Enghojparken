@@ -243,6 +243,7 @@ export default function App() {
   const [draggedCardId, setDraggedCardId] = useState(null)
   const [dragOverColId, setDragOverColId] = useState(null)
   const [collapsedColumns, setCollapsedColumns] = useState({})
+  const [activeMobileTab, setActiveMobileTab] = useState('todo')
 
   const toggleColumnCollapse = (columnId) => {
     setCollapsedColumns((prev) => ({
@@ -467,7 +468,9 @@ export default function App() {
 
   const handleDragOver = (e, columnId) => {
     e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = 'move'
+    }
     if (dragOverColId !== columnId) {
       setDragOverColId(columnId)
     }
@@ -483,7 +486,7 @@ export default function App() {
 
   const handleDrop = async (e, targetColumnId) => {
     e.preventDefault()
-    const cardId = e.dataTransfer.getData('text/plain') || draggedCardId
+    const cardId = e.dataTransfer?.getData ? e.dataTransfer.getData('text/plain') : draggedCardId
     setDraggedCardId(null)
     setDragOverColId(null)
 
@@ -757,19 +760,68 @@ export default function App() {
               </div>
             </div>
 
+            {/* Mobile Tab Navigation (Horizontal tabs for phone screens) */}
+            <div
+              className="flex md:hidden items-center p-1 bg-slate-200/80 rounded-xl mb-4 gap-1 shadow-inner border border-slate-300/60"
+              role="tablist"
+              aria-label="Opgavestatus kolonner"
+            >
+              {INITIAL_COLUMNS.map((column) => {
+                const isSelected = activeMobileTab === column.id
+                const columnCards = filteredCards.filter((card) => card.columnId === column.id)
+                const isOver = dragOverColId === column.id
+                return (
+                  <button
+                    key={column.id}
+                    type="button"
+                    role="tab"
+                    id={`tab-${column.id}`}
+                    aria-selected={isSelected}
+                    aria-controls={`panel-${column.id}`}
+                    onClick={() => setActiveMobileTab(column.id)}
+                    onDragOver={(e) => {
+                      handleDragOver(e, column.id)
+                      if (activeMobileTab !== column.id) {
+                        setActiveMobileTab(column.id)
+                      }
+                    }}
+                    onDrop={(e) => handleDrop(e, column.id)}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 px-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                      isSelected
+                        ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
+                        : isOver
+                        ? 'bg-sky-100 text-sky-900 border border-sky-300'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/60'
+                    }`}
+                  >
+                    <span className="truncate">{column.title}</span>
+                    <span className={`text-[11px] px-1.5 py-0.5 rounded-full font-medium ${column.badgeBg}`}>
+                      {columnCards.length}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+
             {/* Board Columns: To Do, In Progress, Done */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
               {INITIAL_COLUMNS.map((column) => {
                 const columnCards = filteredCards.filter((card) => card.columnId === column.id)
                 const isOver = dragOverColId === column.id
+                const isSelectedOnMobile = activeMobileTab === column.id
 
                 return (
                   <div
                     key={column.id}
+                    id={`panel-${column.id}`}
+                    role="tabpanel"
+                    aria-labelledby={`tab-${column.id}`}
                     onDragOver={(e) => handleDragOver(e, column.id)}
                     onDragLeave={(e) => handleDragLeave(e, column.id)}
                     onDrop={(e) => handleDrop(e, column.id)}
-                    className={`rounded-xl p-4 border transition-all duration-200 flex flex-col min-h-[550px] ${
+                    className={`rounded-xl p-4 border transition-all duration-200 flex-col min-h-[550px] ${
+                      isSelectedOnMobile ? 'flex' : 'hidden md:flex'
+                    } ${
                       isOver
                         ? 'bg-sky-50 border-sky-400 shadow-md ring-2 ring-sky-300 ring-offset-2'
                         : 'bg-slate-100/90 border-slate-200/90 shadow-xs'
