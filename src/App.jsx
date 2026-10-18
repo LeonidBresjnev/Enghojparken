@@ -175,7 +175,7 @@ function AssigneeDropdown({ boardMembers, selectedAssignees, onChange }) {
 
 const renderDescriptionWithLinks = (text) => {
   if (!text) return null
-  const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi
+  const urlRegex = /(https?:\/\/\S+|www\.\S+)/gi
   const parts = []
   let lastIndex = 0
   let match
@@ -240,12 +240,48 @@ function BoardApp() {
   const [dragOverColId, setDragOverColId] = useState(null)
   const [collapsedColumns, setCollapsedColumns] = useState({})
   const [activeMobileTab, setActiveMobileTab] = useState('todo')
+  const boardColumnsRef = useRef(null)
 
   const columns = useMemo(() => [
     { id: 'todo', title: t('columns.todo'), color: 'border-amber-400', badgeBg: 'bg-amber-100 text-amber-800' },
     { id: 'in_progress', title: t('columns.in_progress'), color: 'border-blue-500', badgeBg: 'bg-blue-100 text-blue-800' },
     { id: 'done', title: t('columns.done'), color: 'border-emerald-500', badgeBg: 'bg-emerald-100 text-emerald-800' },
   ], [t])
+
+  const scrollToColumn = (columnId) => {
+    setActiveMobileTab(columnId)
+    const el = document.getElementById(`panel-${columnId}`)
+    if (el) {
+      el.scrollIntoView?.({ behavior: 'smooth', inline: 'center', block: 'nearest' })
+    }
+  }
+
+  const handleContainerScroll = () => {
+    const container = boardColumnsRef.current
+    if (!container) return
+    const panels = columns.map((c) => document.getElementById(`panel-${c.id}`)).filter(Boolean)
+    if (!panels.length) return
+
+    const containerRect = container.getBoundingClientRect()
+    const containerCenter = containerRect.left + containerRect.width / 2
+
+    let closestColId = columns[0].id
+    let minDistance = Infinity
+
+    panels.forEach((panel, idx) => {
+      const rect = panel.getBoundingClientRect()
+      const panelCenter = rect.left + rect.width / 2
+      const dist = Math.abs(containerCenter - panelCenter)
+      if (dist < minDistance) {
+        minDistance = dist
+        closestColId = columns[idx].id
+      }
+    })
+
+    if (closestColId && closestColId !== activeMobileTab) {
+      setActiveMobileTab(closestColId)
+    }
+  }
 
   const [newCard, setNewCard] = useState({
     title: '',
@@ -780,8 +816,13 @@ function BoardApp() {
                     id={`tab-${column.id}`}
                     aria-selected={isSelected}
                     aria-controls={`panel-${column.id}`}
-                    onClick={() => setActiveMobileTab(column.id)}
-                    onDragOver={(e) => handleDragOver(e, column.id)}
+                    onClick={() => scrollToColumn(column.id)}
+                    onDragOver={(e) => {
+                      handleDragOver(e, column.id)
+                      if (activeMobileTab !== column.id) {
+                        scrollToColumn(column.id)
+                      }
+                    }}
                     onDragLeave={(e) => handleDragLeave(e, column.id)}
                     onDrop={(e) => handleDrop(e, column.id)}
                     className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
@@ -802,7 +843,11 @@ function BoardApp() {
             </div>
 
             {/* Board Columns: To Do, In Progress, Done */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+            <div
+              ref={boardColumnsRef}
+              onScroll={handleContainerScroll}
+              className="flex overflow-x-auto snap-x snap-mandatory gap-3 sm:gap-4 pb-4 px-1 md:grid md:grid-cols-3 md:gap-6 md:overflow-visible md:pb-0 md:px-0 scroll-smooth items-start -mx-2 sm:mx-0"
+            >
               {columns.map((column) => {
                 const columnCards = filteredCards.filter((card) => card.columnId === column.id)
                 const isOver = dragOverColId === column.id
@@ -814,15 +859,20 @@ function BoardApp() {
                     id={`panel-${column.id}`}
                     role="tabpanel"
                     aria-labelledby={`tab-${column.id}`}
-                    onDragOver={(e) => handleDragOver(e, column.id)}
+                    onDragOver={(e) => {
+                      handleDragOver(e, column.id)
+                      if (activeMobileTab !== column.id) {
+                        setActiveMobileTab(column.id)
+                      }
+                    }}
                     onDragLeave={(e) => handleDragLeave(e, column.id)}
                     onDrop={(e) => handleDrop(e, column.id)}
-                    className={`rounded-xl p-4 border transition-all duration-200 flex-col min-h-[550px] ${
-                      isSelectedOnMobile ? 'flex' : 'hidden md:flex'
-                    } ${
+                    className={`w-[84vw] max-w-[360px] sm:w-[380px] sm:max-w-none md:w-auto flex-shrink-0 snap-center md:flex-shrink md:snap-align-none rounded-xl p-4 border transition-all duration-200 flex flex-col min-h-[550px] ${
                       isOver
                         ? 'bg-sky-50 border-sky-400 shadow-md ring-2 ring-sky-300 ring-offset-2'
-                        : 'bg-slate-100/90 border-slate-200/90 shadow-xs'
+                        : isSelectedOnMobile
+                        ? 'bg-slate-100/95 border-slate-300/90 shadow-sm'
+                        : 'bg-slate-100/70 border-slate-200/80 shadow-xs'
                     }`}
                   >
                     {/* Column Header */}

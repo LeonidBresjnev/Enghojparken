@@ -572,8 +572,8 @@ describe('Scrumboard Tests with Mock Data', () => {
     const titleInput = screen.getByPlaceholderText(/f\.eks\. Klargør regnskab til generalforsamling/i)
     const descInput = screen.getByPlaceholderText(/Detaljer om opgaven og hvad der skal gøres\.\.\./i)
 
-    await user.type(titleInput, 'Dokumentationsopgave')
-    await user.type(descInput, 'Se vejledning på https://example.com/docs og referer til www.forening.dk for detaljer.')
+    fireEvent.change(titleInput, { target: { value: 'Dokumentationsopgave' } })
+    fireEvent.change(descInput, { target: { value: 'Se vejledning på https://example.com/docs og referer til www.forening.dk for detaljer.' } })
 
     const submitBtn = screen.getByRole('button', { name: /tilføj opgave/i })
     await user.click(submitBtn)
@@ -598,6 +598,32 @@ describe('Scrumboard Tests with Mock Data', () => {
     // Clicking the link shouldn't open the edit modal due to stopPropagation
     await user.click(httpsLink)
     expect(screen.queryByRole('heading', { name: /rediger opgave/i })).not.toBeInTheDocument()
+  })
+
+  it('renders long URLs and URLs with subdirectories/query strings completely without truncating', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    const createBtn = screen.getByRole('button', { name: /opret ny opgave/i })
+    await user.click(createBtn)
+
+    const titleInput = screen.getByPlaceholderText(/f\.eks\. Klargør regnskab til generalforsamling/i)
+    const descInput = screen.getByPlaceholderText(/Detaljer om opgaven og hvad der skal gøres\.\.\./i)
+
+    const longUrl = 'https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?gsessionid=RVf0h5ev2IIAY_99W4SGHi6qIF5kjB7LHAirJsRxTjPJb7q5EtUJlg&status=active#section'
+    fireEvent.change(titleInput, { target: { value: 'Opgave med lang URL' } })
+    fireEvent.change(descInput, { target: { value: `Her er et link: ${longUrl}. Tjek det venligst.` } })
+
+    const submitBtn = screen.getByRole('button', { name: /tilføj opgave/i })
+    await user.click(submitBtn)
+
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { name: /opret ny opgave/i })).not.toBeInTheDocument()
+    })
+
+    const renderedLink = screen.getByRole('link', { name: longUrl })
+    expect(renderedLink).toBeInTheDocument()
+    expect(renderedLink).toHaveAttribute('href', longUrl)
   })
 
   it('renders horizontal mobile tabs for buckets and supports switching tabs', async () => {
@@ -649,6 +675,32 @@ describe('Scrumboard Tests with Mock Data', () => {
 
     await waitFor(() => {
       expect(mockCardsData.find((c) => c.id === 'card-1').columnId).toBe('in_progress')
+    })
+  })
+
+  it('renders all bucket panels in the horizontal carousel and supports direct drag-and-drop to adjacent bucket panels', async () => {
+    render(<App />)
+
+    // Verify all 3 panels are rendered in the DOM
+    const todoPanel = document.getElementById('panel-todo')
+    const inProgressPanel = document.getElementById('panel-in_progress')
+    const donePanel = document.getElementById('panel-done')
+
+    expect(todoPanel).toBeInTheDocument()
+    expect(inProgressPanel).toBeInTheDocument()
+    expect(donePanel).toBeInTheDocument()
+
+    // Simulate drag and drop of card-2 ('in_progress') onto the visible Done bucket panel
+    const mockDataTransfer = {
+      getData: (format) => (format === 'text/plain' ? 'card-2' : ''),
+      dropEffect: 'move',
+    }
+
+    fireEvent.dragOver(donePanel, { dataTransfer: mockDataTransfer })
+    fireEvent.drop(donePanel, { dataTransfer: mockDataTransfer })
+
+    await waitFor(() => {
+      expect(mockCardsData.find((c) => c.id === 'card-2').columnId).toBe('done')
     })
   })
 })
