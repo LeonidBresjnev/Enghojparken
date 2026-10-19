@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Globe, ChevronDown, Check } from 'lucide-react'
 import { useTranslation } from '../i18n'
 
-export default function LanguageSelector({ variant = 'header' }) {
+export default function LanguageSelector() {
   const { language, setLanguage, supportedLanguages } = useTranslation()
   const [isOpen, setIsOpen] = useState(false)
   const dropdownRef = useRef(null)
