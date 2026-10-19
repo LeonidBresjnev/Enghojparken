@@ -45,7 +45,7 @@ export default function LanguageSelector() {
         <div
           role="menu"
           aria-orientation="vertical"
-          className="absolute left-0 mt-1.5 w-36 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden py-1 z-60 animate-in fade-in-50 zoom-in-95 duration-100"
+          className="absolute left-0 mt-1.5 w-36 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden py-1 z-[60] animate-dropdown-in motion-reduce:animate-none"
         >
           {supportedLanguages.map((langItem) => {
             const isSelected = langItem.code === language

@@ -18,16 +18,12 @@ import { isUserAllowed, getAllowedUserNames } from './allowedUsers'
 import AuthModal from './AuthModal'
 import { I18nProvider, useTranslation } from './i18n'
 import Header from './components/Header'
-import TaskCard from './components/TaskCard'
+import TaskColumn from './components/TaskColumn'
+import TaskFormModal from './components/TaskFormModal'
+import DeleteTaskDialog from './components/DeleteTaskDialog'
 import { getCardAssignees, normalizePriority } from './utils/cardUtils'
 import {
-  Trash2,
   User as UserIcon,
-  ChevronDown,
-  ChevronUp,
-  Edit3,
-  X,
-  Check,
   LogIn,
   Loader2,
   AlertTriangle,
@@ -35,127 +31,6 @@ import {
   Lock,
   ShieldCheck
 } from 'lucide-react'
-
-
-// Multi-select Dropdown Component with Checkmarks for Board Members
-function AssigneeDropdown({ boardMembers, selectedAssignees, onChange }) {
-  const { t } = useTranslation()
-  const [isOpen, setIsOpen] = useState(false)
-  const dropdownRef = useRef(null)
-
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setIsOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [])
-
-  const toggleMember = (member) => {
-    if (selectedAssignees.includes(member)) {
-      onChange(selectedAssignees.filter((m) => m !== member))
-    } else {
-      onChange([...selectedAssignees, member])
-    }
-  }
-
-  const selectedCount = selectedAssignees.length
-
-  return (
-    <div className="relative" ref={dropdownRef}>
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg hover:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500 text-left transition-colors cursor-pointer shadow-2xs"
-      >
-        <div className="flex items-center gap-2 overflow-hidden mr-2">
-          <Users className="w-4 h-4 text-slate-400 shrink-0" />
-          {selectedCount === 0 ? (
-            <span className="text-slate-400 italic">{t('assignee.selectPlaceholder')}</span>
-          ) : (
-            <div className="flex flex-wrap gap-1 items-center">
-              {selectedAssignees.slice(0, 2).map((m, idx) => (
-                <span
-                  key={idx}
-                  className="bg-sky-100 text-sky-800 text-xs px-2 py-0.5 rounded-md font-medium truncate max-w-[150px]"
-                >
-                  {m}
-                </span>
-              ))}
-              {selectedCount > 2 && (
-                <span className="bg-slate-100 text-slate-600 text-xs px-1.5 py-0.5 rounded-md font-medium">
-                  {t('assignee.moreCount', { count: selectedCount - 2 })}
-                </span>
-              )}
-            </div>
-          )}
-        </div>
-        <ChevronDown
-          className={`w-4 h-4 text-slate-400 transition-transform duration-200 shrink-0 ${
-            isOpen ? 'rotate-180 text-sky-600' : ''
-          }`}
-        />
-      </button>
-
-      {isOpen && (
-        <div className="absolute z-60 left-0 right-0 mt-1.5 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden py-1.5 animate-in fade-in-50 zoom-in-95 duration-100">
-          <div className="px-3 py-1.5 border-b border-slate-100 flex items-center justify-between text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-            <span>{t('assignee.boardMembersTitle')}</span>
-            {selectedCount > 0 && (
-              <button
-                type="button"
-                onClick={() => onChange([])}
-                className="text-sky-600 hover:text-sky-800 font-normal normal-case cursor-pointer"
-              >
-                {t('assignee.deselectAll')}
-              </button>
-            )}
-          </div>
-
-          <div className="max-h-60 overflow-y-auto p-1 flex flex-col gap-0.5">
-            {boardMembers.map((member, idx) => {
-              const isSelected = selectedAssignees.includes(member)
-              return (
-                <button
-                  type="button"
-                  key={idx}
-                  onClick={() => toggleMember(member)}
-                  className={`w-full flex items-center justify-between px-3 py-2 text-xs rounded-lg text-left transition-colors cursor-pointer ${
-                    isSelected
-                      ? 'bg-sky-50 text-sky-950 font-medium'
-                      : 'text-slate-700 hover:bg-slate-50'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5 min-w-0 pr-2">
-                    <div
-                      className={`w-4 h-4 rounded border flex items-center justify-center transition-colors shrink-0 ${
-                        isSelected
-                          ? 'bg-sky-600 border-sky-600 text-white'
-                          : 'border-slate-300 bg-white'
-                      }`}
-                    >
-                      {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
-                    </div>
-                    <span className="truncate">{member}</span>
-                  </div>
-                  {isSelected && (
-                    <span className="text-[10px] text-sky-600 font-semibold bg-sky-100/80 px-1.5 py-0.5 rounded shrink-0">
-                      {t('assignee.selectedBadge')}
-                    </span>
-                  )}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
 
 
 function BoardApp() {
@@ -692,11 +567,15 @@ function BoardApp() {
                 const isSelectedOnMobile = activeMobileTab === column.id
 
                 return (
-                  <div
+                  <TaskColumn
                     key={column.id}
-                    id={`panel-${column.id}`}
-                    role="tabpanel"
-                    aria-labelledby={`tab-${column.id}`}
+                    column={column}
+                    cards={columnCards}
+                    isOver={isOver}
+                    isSelectedOnMobile={isSelectedOnMobile}
+                    isCollapsed={collapsedColumns[column.id]}
+                    draggedCardId={draggedCardId}
+                    onToggleCollapse={() => toggleColumnCollapse(column.id)}
                     onDragOver={(e) => {
                       handleDragOver(e, column.id)
                       if (activeMobileTab !== column.id) {
@@ -705,112 +584,18 @@ function BoardApp() {
                     }}
                     onDragLeave={(e) => handleDragLeave(e, column.id)}
                     onDrop={(e) => handleDrop(e, column.id)}
-                    className={`w-[84vw] max-w-[360px] sm:w-[380px] sm:max-w-none md:w-auto flex-shrink-0 snap-center md:flex-shrink md:snap-align-none rounded-xl p-4 border transition-all duration-200 flex flex-col min-h-[550px] ${
-                      isOver
-                        ? 'bg-sky-50 border-sky-400 shadow-md ring-2 ring-sky-300 ring-offset-2'
-                        : isSelectedOnMobile
-                        ? 'bg-slate-100/95 border-slate-300/90 shadow-sm'
-                        : 'bg-slate-100/70 border-slate-200/80 shadow-xs'
-                    }`}
-                  >
-                    {/* Column Header */}
-                    <div className={`flex items-center justify-between pb-3 mb-3 border-b-2 ${column.color}`}>
-                      <div className="flex items-center gap-2">
-                        <h2 className="font-semibold text-slate-800 text-sm">{column.title}</h2>
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${column.badgeBg}`}>
-                          {columnCards.length}
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => toggleColumnCollapse(column.id)}
-                        className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition-colors cursor-pointer"
-                        title={collapsedColumns[column.id] ? t('expandColumn', { name: column.title }) : t('collapseColumn', { name: column.title })}
-                        aria-label={collapsedColumns[column.id] ? t('expandColumn', { name: column.title }) : t('collapseColumn', { name: column.title })}
-                      >
-                        {collapsedColumns[column.id] ? (
-                          <ChevronDown className="w-4 h-4" />
-                        ) : (
-                          <ChevronUp className="w-4 h-4" />
-                        )}
-                      </button>
-                    </div>
-
-                    {/* Cards Container */}
-                    {collapsedColumns[column.id] ? (
-                      /* Collapsed / Stacked View */
-                      <div className="flex-1 flex flex-col -space-y-1.5 py-1">
-                        {columnCards.length === 0 ? (
-                          <div
-                            className={`flex-1 flex flex-col items-center justify-center text-center p-6 border-2 border-dashed rounded-lg transition-colors ${
-                              isOver ? 'border-sky-400 bg-sky-100/40 text-sky-700' : 'border-slate-200 text-slate-400'
-                            }`}
-                          >
-                            <p className="text-xs">{t('task.emptyColumn')}</p>
-                          </div>
-                        ) : (
-                          columnCards.map((card, idx) => (
-                            <TaskCard
-                              key={card.id}
-                              card={card}
-                              isCollapsed={true}
-                              zIndex={columnCards.length - idx}
-                              isDragging={draggedCardId === card.id}
-                              onDragStart={handleDragStart}
-                              onDragEnd={handleDragEnd}
-                              onClick={() => {
-                                const assignees = getCardAssignees(card)
-                                setEditingCard({
-                                  ...card,
-                                  assignees: assignees.length > 0 ? assignees : [],
-                                })
-                              }}
-                            />
-                          ))
-                        )}
-                      </div>
-                    ) : (
-                      /* Expanded / Full View */
-                      <div className="flex-1 flex flex-col gap-3">
-                        {columnCards.length === 0 ? (
-                          <div className={`flex-1 flex flex-col items-center justify-center text-center p-6 border-2 border-dashed rounded-lg transition-colors ${
-                            isOver ? 'border-sky-400 bg-sky-100/40 text-sky-700' : 'border-slate-200 text-slate-400'
-                          }`}>
-                            <p className="text-xs">{t('task.emptyColumn')}</p>
-                          </div>
-                        ) : (
-                          columnCards.map((card) => {
-                            const colOrder = ['todo', 'in_progress', 'done']
-                            const currentIndex = colOrder.indexOf(card.columnId)
-                            const canMoveLeft = currentIndex > 0
-                            const canMoveRight = currentIndex < colOrder.length - 1
-
-                            return (
-                              <TaskCard
-                                key={card.id}
-                                card={card}
-                                isCollapsed={false}
-                                isDragging={draggedCardId === card.id}
-                                onDragStart={handleDragStart}
-                                onDragEnd={handleDragEnd}
-                                onClick={() => {
-                                  const assignees = getCardAssignees(card)
-                                  setEditingCard({
-                                    ...card,
-                                    assignees: assignees.length > 0 ? assignees : [],
-                                  })
-                                }}
-                                onDelete={(c) => setCardToDelete(c)}
-                                onMove={(cardId, direction) => moveCard(cardId, direction)}
-                                canMoveLeft={canMoveLeft}
-                                canMoveRight={canMoveRight}
-                              />
-                            )
-                          })
-                        )}
-                      </div>
-                    )}
-                  </div>
+                    onDragStart={handleDragStart}
+                    onDragEnd={handleDragEnd}
+                    onCardClick={(card) => {
+                      const assignees = getCardAssignees(card)
+                      setEditingCard({
+                        ...card,
+                        assignees: assignees.length > 0 ? assignees : [],
+                      })
+                    }}
+                    onDeleteCard={setCardToDelete}
+                    onMoveCard={moveCard}
+                  />
                 )
               })}
             </div>
@@ -818,310 +603,39 @@ function BoardApp() {
         )}
       </main>
 
-      {/* Edit Card Modal */}
       {editingCard && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/50 backdrop-blur-xs"
-          onClick={() => setEditingCard(null)}
-        >
-          <div
-            className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 border border-slate-200"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
-              <div className="flex items-center gap-2">
-                <Edit3 className="w-5 h-5 text-sky-600" />
-                <h3 className="text-lg font-bold text-slate-900">{t('editTask')}</h3>
-              </div>
-              <button
-                onClick={() => setEditingCard(null)}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg text-sm cursor-pointer"
-                aria-label={t('close')}
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleUpdateCard} className="flex flex-col gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">{t('task.title')}</label>
-                <input
-                  type="text"
-                  required
-                  placeholder={t('task.titlePlaceholder')}
-                  value={editingCard.title}
-                  onChange={(e) => setEditingCard({ ...editingCard, title: e.target.value })}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">{t('task.description')}</label>
-                <textarea
-                  rows={4}
-                  placeholder={t('task.descriptionPlaceholder')}
-                  value={editingCard.description || ''}
-                  onChange={(e) => setEditingCard({ ...editingCard, description: e.target.value })}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 resize-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">{t('task.status')}</label>
-                  <select
-                    value={editingCard.columnId}
-                    onChange={(e) => setEditingCard({ ...editingCard, columnId: e.target.value })}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
-                  >
-                    <option value="todo">{t('columns.todo')}</option>
-                    <option value="in_progress">{t('columns.in_progress')}</option>
-                    <option value="done">{t('columns.done')}</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">{t('priority.label')}</label>
-                  <select
-                    value={editingCard.priority}
-                    onChange={(e) => setEditingCard({ ...editingCard, priority: e.target.value })}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
-                  >
-                    <option value="Low">{t('priority.low')}</option>
-                    <option value="Medium">{t('priority.medium')}</option>
-                    <option value="High">{t('priority.high')}</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  {t('assignee.formLabel')}
-                </label>
-                <AssigneeDropdown
-                  boardMembers={boardMembers}
-                  selectedAssignees={editingCard.assignees || getCardAssignees(editingCard)}
-                  onChange={(updated) =>
-                    setEditingCard({
-                      ...editingCard,
-                      assignees: updated,
-                    })
-                  }
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">{t('task.dueDate')}</label>
-                <input
-                  type="date"
-                  value={editingCard.dueDate || ''}
-                  onChange={(e) => setEditingCard({ ...editingCard, dueDate: e.target.value })}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
-                />
-              </div>
-
-              <div className="flex items-center justify-between gap-3 mt-3 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setCardToDelete(editingCard)}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg cursor-pointer transition-colors"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  {t('deleteTask')}
-                </button>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setEditingCard(null)}
-                    className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 rounded-lg hover:bg-slate-100 cursor-pointer"
-                  >
-                    {t('cancel')}
-                  </button>
-                  <button
-                    type="submit"
-                    className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-sky-600 hover:bg-sky-500 rounded-lg shadow-sm cursor-pointer"
-                  >
-                    <Check className="w-4 h-4" />
-                    {t('saveChanges')}
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
+        <TaskFormModal
+          mode="edit"
+          task={editingCard}
+          boardMembers={boardMembers}
+          onChange={setEditingCard}
+          onSubmit={handleUpdateCard}
+          onClose={() => setEditingCard(null)}
+          onDelete={() => setCardToDelete(editingCard)}
+        />
       )}
 
-      {/* Create Task Modal */}
       {isCreateModalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/50 backdrop-blur-xs"
-          onClick={() => setIsCreateModalOpen(false)}
-        >
-          <div
-            className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 border border-slate-200"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
-              <h3 className="text-lg font-bold text-slate-900">{t('createTask')}</h3>
-              <button
-                onClick={() => setIsCreateModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg text-sm cursor-pointer"
-                aria-label={t('close')}
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateCard} className="flex flex-col gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">{t('task.title')}</label>
-                <input
-                  type="text"
-                  required
-                  placeholder={t('task.titlePlaceholder')}
-                  value={newCard.title}
-                  onChange={(e) => setNewCard({ ...newCard, title: e.target.value })}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">{t('task.description')}</label>
-                <textarea
-                  rows={3}
-                  placeholder={t('task.descriptionPlaceholder')}
-                  value={newCard.description}
-                  onChange={(e) => setNewCard({ ...newCard, description: e.target.value })}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 resize-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">{t('task.status')}</label>
-                  <select
-                    value={newCard.columnId}
-                    onChange={(e) => setNewCard({ ...newCard, columnId: e.target.value })}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
-                  >
-                    <option value="todo">{t('columns.todo')}</option>
-                    <option value="in_progress">{t('columns.in_progress')}</option>
-                    <option value="done">{t('columns.done')}</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">{t('priority.label')}</label>
-                  <select
-                    value={newCard.priority}
-                    onChange={(e) => setNewCard({ ...newCard, priority: e.target.value })}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
-                  >
-                    <option value="Low">{t('priority.low')}</option>
-                    <option value="Medium">{t('priority.medium')}</option>
-                    <option value="High">{t('priority.high')}</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  {t('assignee.formLabel')}
-                </label>
-                <AssigneeDropdown
-                  boardMembers={boardMembers}
-                  selectedAssignees={newCard.assignees || []}
-                  onChange={(updated) =>
-                    setNewCard({
-                      ...newCard,
-                      assignees: updated,
-                    })
-                  }
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">{t('task.dueDate')}</label>
-                <input
-                  type="date"
-                  value={newCard.dueDate}
-                  onChange={(e) => setNewCard({ ...newCard, dueDate: e.target.value })}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-3 mt-3 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setIsCreateModalOpen(false)}
-                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 rounded-lg hover:bg-slate-100 cursor-pointer"
-                >
-                  {t('cancel')}
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 text-sm font-medium text-white bg-sky-600 hover:bg-sky-500 rounded-lg shadow-sm cursor-pointer"
-                >
-                  {t('addTask')}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <TaskFormModal
+          mode="create"
+          task={newCard}
+          boardMembers={boardMembers}
+          onChange={setNewCard}
+          onSubmit={handleCreateCard}
+          onClose={() => setIsCreateModalOpen(false)}
+        />
       )}
 
-      {/* Delete Confirmation Dialog */}
       {cardToDelete && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="delete-dialog-title"
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/50 backdrop-blur-xs"
-          onClick={() => setCardToDelete(null)}
-        >
-          <div
-            className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-2.5 bg-red-100 text-red-600 rounded-full shrink-0">
-                <Trash2 className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 id="delete-dialog-title" className="text-lg font-bold text-slate-900">
-                  {t('deleteDialog.title')}
-                </h3>
-                <p className="text-xs text-slate-500">{t('deleteDialog.warning')}</p>
-              </div>
-            </div>
-            <p className="text-sm text-slate-600 mb-6 leading-relaxed">
-              {t('deleteDialog.confirmQuestion', { title: cardToDelete.title })}
-            </p>
-            <div className="flex items-center justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setCardToDelete(null)}
-                className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 rounded-lg hover:bg-slate-100 cursor-pointer transition-colors"
-              >
-                {t('cancel')}
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  const idToDelete = cardToDelete.id
-                  setCardToDelete(null)
-                  await deleteCard(idToDelete)
-                }}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg shadow-sm cursor-pointer transition-colors"
-              >
-                {t('deleteTask')}
-              </button>
-            </div>
-          </div>
-        </div>
+        <DeleteTaskDialog
+          card={cardToDelete}
+          onCancel={() => setCardToDelete(null)}
+          onConfirm={(card) => {
+            setCardToDelete(null)
+            return deleteCard(card.id)
+          }}
+        />
       )}
-
       {/* Auth Modal */}
       <AuthModal
         isOpen={isAuthModalOpen}

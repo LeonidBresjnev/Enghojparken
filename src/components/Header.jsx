@@ -15,10 +15,13 @@ export default function Header({
   return (
     <header
       className="relative bg-slate-900 text-white shadow-lg bg-cover bg-center overflow-hidden min-h-[170px] flex items-center"
-      style={{
-        backgroundImage: `url(${headerBg})`,
-      }}
     >
+      <img
+        src={headerBg}
+        alt=""
+        aria-hidden="true"
+        className="absolute inset-0 h-full w-full object-cover object-center"
+      />
       {/* Lighter overlay to let the background image shine through clearly */}
       <div className="absolute inset-0 bg-slate-950/35 backdrop-blur-[0.5px]"></div>
 
