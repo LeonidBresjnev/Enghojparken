@@ -354,7 +354,7 @@ function BoardApp() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
+    <div className="min-h-screen bg-gradient-to-b from-slate-100 via-slate-50 to-white flex flex-col font-sans">
       <Header
         currentUser={currentUser}
         onSignOut={handleSignOut}
@@ -422,7 +422,7 @@ function BoardApp() {
             )}
 
             {/* Controls & Filter bar */}
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-6 flex flex-wrap items-center justify-between gap-4">
+            <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-sm border border-slate-200 p-4 mb-6 flex flex-wrap items-center justify-between gap-4">
               <div className="flex flex-wrap items-center gap-4 max-w-full">
                 {/* Person filter */}
                 <div className="flex items-center gap-2 overflow-x-auto pb-1 max-w-full">
@@ -432,7 +432,7 @@ function BoardApp() {
                   </span>
                   <button
                     onClick={() => setSelectedAssignee('All')}
-                    className={`px-3 py-1 text-xs font-medium rounded-full transition-colors cursor-pointer whitespace-nowrap ${
+                    className={`px-3 py-1 text-xs font-medium rounded-full transition-colors cursor-pointer whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70 ${
                       selectedAssignee === 'All'
                         ? 'bg-sky-600 text-white shadow-sm font-semibold'
                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -446,7 +446,7 @@ function BoardApp() {
                       <button
                         key={member}
                         onClick={() => setSelectedAssignee(member)}
-                        className={`px-3 py-1 text-xs font-medium rounded-full transition-colors cursor-pointer whitespace-nowrap ${
+                        className={`px-3 py-1 text-xs font-medium rounded-full transition-colors cursor-pointer whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70 ${
                           isSelected
                             ? 'bg-sky-600 text-white shadow-sm font-semibold'
                             : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -465,7 +465,7 @@ function BoardApp() {
                   </span>
                   <button
                     onClick={() => setSelectedPriority('All')}
-                    className={`px-3 py-1 text-xs font-medium rounded-full transition-colors cursor-pointer whitespace-nowrap ${
+                    className={`px-3 py-1 text-xs font-medium rounded-full transition-colors cursor-pointer whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70 ${
                       selectedPriority === 'All'
                         ? 'bg-sky-600 text-white shadow-sm font-semibold'
                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -483,7 +483,7 @@ function BoardApp() {
                       <button
                         key={p.value}
                         onClick={() => setSelectedPriority(p.value)}
-                        className={`px-3 py-1 text-xs font-medium rounded-full transition-colors cursor-pointer whitespace-nowrap ${
+                        className={`px-3 py-1 text-xs font-medium rounded-full transition-colors cursor-pointer whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70 ${
                           isSelected
                             ? 'bg-sky-600 text-white shadow-sm font-semibold'
                             : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -513,7 +513,7 @@ function BoardApp() {
 
             {/* Mobile Tab Navigation (Horizontal tabs for phone screens) */}
             <div
-              className="flex md:hidden items-center p-1 bg-slate-200/80 rounded-xl mb-4 gap-1 shadow-inner border border-slate-300/60"
+              className="flex md:hidden items-center p-1 bg-white/90 backdrop-blur-sm rounded-xl mb-4 gap-1 shadow-sm border border-slate-200"
               role="tablist"
               aria-label={t('mobileTablistAria')}
             >
@@ -538,7 +538,7 @@ function BoardApp() {
                     }}
                     onDragLeave={(e) => handleDragLeave(e, column.id)}
                     onDrop={(e) => handleDrop(e, column.id)}
-                    className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70 ${
                       isSelected
                         ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
                         : isOver

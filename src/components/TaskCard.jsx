@@ -40,7 +40,7 @@ export default function TaskCard({
         onDragEnd={onDragEnd}
         onClick={onClick}
         style={zIndex !== undefined ? { zIndex } : undefined}
-        className={`bg-white rounded-lg px-3.5 py-2.5 shadow-xs hover:shadow-md transition-all border border-slate-200/90 hover:border-sky-400 cursor-pointer flex items-center justify-between group hover:z-30 hover:-translate-y-0.5 relative ${
+        className={`bg-white rounded-xl px-3.5 py-2.5 shadow-xs hover:shadow-md transition-all duration-200 border border-slate-200/90 hover:border-sky-400 cursor-pointer flex items-center justify-between group hover:z-30 hover:-translate-y-0.5 relative ${
           isDragging ? 'opacity-40 scale-[0.98] border-dashed border-sky-500' : ''
         }`}
         title={`${card.title} - ${t('editTask')}`}
@@ -58,7 +58,7 @@ export default function TaskCard({
       onDragStart={(e) => onDragStart?.(e, card.id)}
       onDragEnd={onDragEnd}
       onClick={onClick}
-      className={`bg-white rounded-lg p-4 shadow-sm hover:shadow-md transition-all border border-slate-200 flex flex-col gap-3 cursor-pointer group hover:border-sky-300 ${
+      className={`bg-white rounded-xl p-4 shadow-sm hover:shadow-md transition-all duration-200 border border-slate-200 flex flex-col gap-3 cursor-pointer group hover:border-sky-300 hover:-translate-y-0.5 ${
         isDragging ? 'opacity-40 scale-[0.98] border-dashed border-sky-500' : ''
       }`}
     >
@@ -116,7 +116,7 @@ export default function TaskCard({
                   e.stopPropagation()
                   onDelete(card)
                 }}
-                className="text-slate-400 hover:text-red-500 transition-colors p-1 rounded hover:bg-red-50 cursor-pointer"
+                className="text-slate-400 hover:text-red-500 transition-colors p-1 rounded hover:bg-red-50 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300"
                 title={t('deleteTask')}
                 aria-label={t('deleteTask')}
               >
@@ -132,7 +132,7 @@ export default function TaskCard({
                   e.stopPropagation()
                   onMove?.(card.id, 'prev')
                 }}
-                className="p-1 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded transition-colors cursor-pointer"
+                className="p-1 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
                 title="Flyt til forrige kolonne"
                 aria-label="Flyt til forrige kolonne"
               >
@@ -145,7 +145,7 @@ export default function TaskCard({
                   e.stopPropagation()
                   onMove?.(card.id, 'next')
                 }}
-                className="p-1 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded transition-colors cursor-pointer"
+                className="p-1 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
                 title="Flyt til næste kolonne"
                 aria-label="Flyt til næste kolonne"
               >
