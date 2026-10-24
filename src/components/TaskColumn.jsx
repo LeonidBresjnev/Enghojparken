@@ -18,6 +18,7 @@ export default function TaskColumn({
   onCardClick,
   onDeleteCard,
   onMoveCard,
+  onArchiveCard,
 }) {
   const { t } = useTranslation()
 
@@ -93,6 +94,7 @@ export default function TaskColumn({
                   onClick={() => onCardClick(card)}
                   onDelete={onDeleteCard}
                   onMove={onMoveCard}
+                  onArchive={onArchiveCard}
                   canMoveLeft={currentIndex > 0}
                   canMoveRight={currentIndex < columnOrder.length - 1}
                 />

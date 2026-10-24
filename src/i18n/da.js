@@ -30,10 +30,17 @@ export default {
     todo: 'Kommende opgaver',
     in_progress: 'Igangværende',
     done: 'Færdiggjort',
+    archive: 'Arkiv',
   },
   collapseColumn: 'Fold {name} sammen',
   expandColumn: 'Udvid {name}',
   mobileTablistAria: 'Opgavestatus kolonner',
+  showArchive: 'Vis arkiv',
+  hideArchive: 'Skjul arkiv',
+  archiveTitle: 'Arkiverede opgaver',
+  archiveTask: 'Arkivér opgave',
+  unarchiveTask: 'Gendan opgave',
+  archiveEmptyState: 'Ingen arkiverede opgaver matcher dine nuværende filtre.',
 
   // Priorities
   priority: {
@@ -86,6 +93,13 @@ export default {
     title: 'Slet opgave',
     warning: 'Denne handling kan ikke fortrydes.',
     confirmQuestion: 'Er du sikker på, at du vil slette opgaven "{title}"?',
+  },
+
+  // Archive modal
+  archiveDialog: {
+    title: 'Arkivér opgave',
+    warning: 'Arkiverede opgaver kan gendannes senere.',
+    confirmQuestion: 'Vil du arkivere opgaven "{title}"?',
   },
 
   // Auth / Login portal

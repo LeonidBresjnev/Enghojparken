@@ -30,10 +30,17 @@ export default {
     todo: 'Upcoming tasks',
     in_progress: 'In progress',
     done: 'Completed',
+    archive: 'Archive',
   },
   collapseColumn: 'Collapse {name}',
   expandColumn: 'Expand {name}',
   mobileTablistAria: 'Task status columns',
+  showArchive: 'Show archive',
+  hideArchive: 'Hide archive',
+  archiveTitle: 'Archived tasks',
+  archiveTask: 'Archive task',
+  unarchiveTask: 'Restore task',
+  archiveEmptyState: 'No archived tasks match your current filters.',
 
   // Priorities
   priority: {
@@ -86,6 +93,13 @@ export default {
     title: 'Delete task',
     warning: 'This action cannot be undone.',
     confirmQuestion: 'Are you sure you want to delete the task "{title}"?',
+  },
+
+  // Archive modal
+  archiveDialog: {
+    title: 'Archive task',
+    warning: 'You can restore archived tasks later.',
+    confirmQuestion: 'Do you want to archive the task "{title}"?',
   },
 
   // Auth / Login portal

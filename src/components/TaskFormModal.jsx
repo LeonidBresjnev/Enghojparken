@@ -81,6 +81,7 @@ export default function TaskFormModal({
                 <option value="todo">{t('columns.todo')}</option>
                 <option value="in_progress">{t('columns.in_progress')}</option>
                 <option value="done">{t('columns.done')}</option>
+                <option value="archive">{t('columns.archive')}</option>
               </select>
             </div>
 

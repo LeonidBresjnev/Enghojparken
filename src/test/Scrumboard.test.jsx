@@ -11,7 +11,18 @@ let mockAuthState = {
 }
 
 let mockCardsData = []
-let snapshotCallback = null
+let snapshotCallbacks = []
+
+function emitSnapshot() {
+  const snapshot = {
+    docs: mockCardsData.map((c) => ({
+      id: c.id,
+      data: () => c,
+    })),
+  }
+
+  snapshotCallbacks.forEach((callback) => callback(snapshot))
+}
 
 vi.mock('../firebase', () => {
   return {
@@ -45,14 +56,7 @@ vi.mock('../firebase', () => {
       const newId = `card-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`
       const newCard = { id: newId, ...data }
       mockCardsData.push(newCard)
-      if (snapshotCallback) {
-        snapshotCallback({
-          docs: mockCardsData.map((c) => ({
-            id: c.id,
-            data: () => c,
-          })),
-        })
-      }
+      emitSnapshot()
       return Promise.resolve({ id: newId })
     }),
     updateDoc: vi.fn((docRef, updates) => {
@@ -60,38 +64,20 @@ vi.mock('../firebase', () => {
       if (index !== -1) {
         mockCardsData[index] = { ...mockCardsData[index], ...updates }
       }
-      if (snapshotCallback) {
-        snapshotCallback({
-          docs: mockCardsData.map((c) => ({
-            id: c.id,
-            data: () => c,
-          })),
-        })
-      }
+      emitSnapshot()
       return Promise.resolve()
     }),
     deleteDoc: vi.fn((docRef) => {
       mockCardsData = mockCardsData.filter((c) => c.id !== docRef.id)
-      if (snapshotCallback) {
-        snapshotCallback({
-          docs: mockCardsData.map((c) => ({
-            id: c.id,
-            data: () => c,
-          })),
-        })
-      }
+      emitSnapshot()
       return Promise.resolve()
     }),
     onSnapshot: vi.fn((queryRef, onNext) => {
-      snapshotCallback = onNext
-      onNext({
-        docs: mockCardsData.map((c) => ({
-          id: c.id,
-          data: () => c,
-        })),
-      })
+      snapshotCallbacks.push(onNext)
+      emitSnapshot()
+
       return () => {
-        snapshotCallback = null
+        snapshotCallbacks = snapshotCallbacks.filter((callback) => callback !== onNext)
       }
     }),
   }
@@ -137,6 +123,8 @@ describe('Scrumboard Tests with Mock Data', () => {
         dueDate: '2026-03-30',
       },
     ]
+
+    snapshotCallbacks = []
   })
 
   it('renders initial board cards correctly across columns', () => {
@@ -701,6 +689,96 @@ describe('Scrumboard Tests with Mock Data', () => {
 
     await waitFor(() => {
       expect(mockCardsData.find((c) => c.id === 'card-2').columnId).toBe('done')
+    })
+  })
+
+  it('archives done tasks, shows them in archive view, and supports unarchive back to active board', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    expect(screen.getByText('Bestil havemand til forårsrengøring')).toBeInTheDocument()
+
+    const archiveButtons = screen.getAllByRole('button', { name: /arkivér opgave/i })
+    await user.click(archiveButtons[0])
+
+    const archiveDialog = screen.getByRole('dialog')
+    await user.click(within(archiveDialog).getByRole('button', { name: /arkivér opgave/i }))
+
+    await waitFor(() => {
+      expect(screen.queryByText('Bestil havemand til forårsrengøring')).not.toBeInTheDocument()
+    })
+
+    const showArchiveButton = screen.getByRole('button', { name: /vis arkiv/i })
+    await user.click(showArchiveButton)
+
+    await waitFor(() => {
+      expect(screen.getByText('Bestil havemand til forårsrengøring')).toBeInTheDocument()
+    })
+
+    const restoreButtons = screen.getAllByRole('button', { name: /gendan opgave/i })
+    await user.click(restoreButtons[0])
+
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: /gendan opgave/i })).not.toBeInTheDocument()
+      expect(screen.getByText('Bestil havemand til forårsrengøring')).toBeInTheDocument()
+    })
+  })
+
+  it('syncs card updates automatically between two simultaneous users', async () => {
+    const userA = userEvent.setup()
+
+    const clientA = render(<App />)
+    const clientB = render(<App />)
+
+    await waitFor(() => {
+      expect(within(clientA.container).getByText('Forbered generalforsamling')).toBeInTheDocument()
+      expect(within(clientB.container).getByText('Forbered generalforsamling')).toBeInTheDocument()
+    })
+
+    const createTaskButtonA = within(clientA.container).getByRole('button', { name: /opret ny opgave/i })
+    await userA.click(createTaskButtonA)
+
+    const titleInputA = within(clientA.container).getByPlaceholderText(/f\.eks\. Klargør regnskab til generalforsamling/i)
+    const descInputA = within(clientA.container).getByPlaceholderText(/Detaljer om opgaven og hvad der skal gøres\.\.\./i)
+
+    await userA.type(titleInputA, 'Synk test opgave')
+    await userA.type(descInputA, 'Denne opgave blev oprettet af bruger A')
+
+    const submitButtonA = within(clientA.container).getByRole('button', { name: /tilføj opgave/i })
+    await userA.click(submitButtonA)
+
+    await waitFor(() => {
+      expect(within(clientB.container).getByText('Synk test opgave')).toBeInTheDocument()
+    })
+
+    const archiveButtonsA = within(clientA.container).getAllByRole('button', { name: /arkivér opgave/i })
+    await userA.click(archiveButtonsA[0])
+
+    const archiveDialogA = within(clientA.container).getByRole('dialog')
+    await userA.click(within(archiveDialogA).getByRole('button', { name: /arkivér opgave/i }))
+
+    await waitFor(() => {
+      expect(within(clientB.container).queryByText('Bestil havemand til forårsrengøring')).not.toBeInTheDocument()
+    })
+
+    const showArchiveButtonA = within(clientA.container).getByRole('button', { name: /vis arkiv/i })
+    const showArchiveButtonB = within(clientB.container).getByRole('button', { name: /vis arkiv/i })
+
+    await userA.click(showArchiveButtonA)
+    await userA.click(showArchiveButtonB)
+
+    await waitFor(() => {
+      expect(within(clientA.container).getByText('Bestil havemand til forårsrengøring')).toBeInTheDocument()
+      expect(within(clientB.container).getByText('Bestil havemand til forårsrengøring')).toBeInTheDocument()
+    })
+
+    const restoreButtonsA = within(clientA.container).getAllByRole('button', { name: /gendan opgave/i })
+    await userA.click(restoreButtonsA[0])
+
+    await waitFor(() => {
+      expect(within(clientA.container).queryByRole('button', { name: /gendan opgave/i })).not.toBeInTheDocument()
+      expect(within(clientB.container).queryByRole('button', { name: /gendan opgave/i })).not.toBeInTheDocument()
+      expect(within(clientB.container).getByText('Bestil havemand til forårsrengøring')).toBeInTheDocument()
     })
   })
 })

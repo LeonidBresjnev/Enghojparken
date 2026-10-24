@@ -19,6 +19,7 @@ import AuthModal from './AuthModal'
 import { I18nProvider, useTranslation } from './i18n'
 import Header from './components/Header'
 import TaskColumn from './components/TaskColumn'
+import TaskCard from './components/TaskCard'
 import TaskFormModal from './components/TaskFormModal'
 import DeleteTaskDialog from './components/DeleteTaskDialog'
 import { getCardAssignees, normalizePriority } from './utils/cardUtils'
@@ -29,7 +30,8 @@ import {
   AlertTriangle,
   Users,
   Lock,
-  ShieldCheck
+  ShieldCheck,
+  Archive
 } from 'lucide-react'
 
 
@@ -44,9 +46,11 @@ function BoardApp() {
   const [firestoreError, setFirestoreError] = useState(null)
   const [selectedAssignee, setSelectedAssignee] = useState('All')
   const [selectedPriority, setSelectedPriority] = useState('All')
+  const [showArchive, setShowArchive] = useState(false)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [editingCard, setEditingCard] = useState(null)
   const [cardToDelete, setCardToDelete] = useState(null)
+  const [cardToArchive, setCardToArchive] = useState(null)
   const [draggedCardId, setDraggedCardId] = useState(null)
   const [dragOverColId, setDragOverColId] = useState(null)
   const [collapsedColumns, setCollapsedColumns] = useState({})
@@ -141,8 +145,14 @@ function BoardApp() {
   // Subscribe to real-time updates from Firestore only when user is authenticated
   useEffect(() => {
     if (!currentUser) {
+      setCards([])
+      setLoadingCards(false)
+      setFirestoreError(null)
       return
     }
+
+    setLoadingCards(true)
+    setFirestoreError(null)
 
     const cardsCollection = collection(db, 'cards')
     const cardsQuery = query(cardsCollection, orderBy('createdAt', 'desc'))
@@ -197,12 +207,24 @@ function BoardApp() {
     })
   }, [cards, selectedAssignee, selectedPriority])
 
+  const activeFilteredCards = useMemo(
+    () => filteredCards.filter((card) => card.columnId !== 'archive'),
+    [filteredCards]
+  )
+
+  const archivedFilteredCards = useMemo(
+    () => filteredCards.filter((card) => card.columnId === 'archive'),
+    [filteredCards]
+  )
+
   const moveCard = async (id, direction) => {
     const colOrder = ['todo', 'in_progress', 'done']
     const card = cards.find((c) => c.id === id)
     if (!card) return
 
     const currentIndex = colOrder.indexOf(card.columnId)
+    if (currentIndex === -1) return
+
     const nextIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1
     if (nextIndex >= 0 && nextIndex < colOrder.length) {
       const nextColumnId = colOrder[nextIndex]
@@ -224,6 +246,34 @@ function BoardApp() {
       }
     } catch (err) {
       console.error('Error deleting card:', err)
+    }
+  }
+
+  const handleArchiveCard = async (card) => {
+    if (!card || card.columnId !== 'done') return
+
+    try {
+      const cardRef = doc(db, 'cards', card.id)
+      await updateDoc(cardRef, {
+        columnId: 'archive',
+        updatedAt: serverTimestamp(),
+      })
+    } catch (err) {
+      console.error('Error archiving card:', err)
+    }
+  }
+
+  const handleUnarchiveCard = async (card, targetColumnId = 'done') => {
+    if (!card || card.columnId !== 'archive') return
+
+    try {
+      const cardRef = doc(db, 'cards', card.id)
+      await updateDoc(cardRef, {
+        columnId: targetColumnId,
+        updatedAt: serverTimestamp(),
+      })
+    } catch (err) {
+      console.error('Error unarchiving card:', err)
     }
   }
 
@@ -505,10 +555,22 @@ function BoardApp() {
                 ) : (
                   <>
                     <span>{t('dragAndDropHint')}</span>
-                    <span>{t('showingTasksLabel')} <strong>{filteredCards.length}</strong> {t('tasksWord')}</span>
+                    <span>{t('showingTasksLabel')} <strong>{activeFilteredCards.length}</strong> {t('tasksWord')}</span>
                   </>
                 )}
               </div>
+
+              <button
+                type="button"
+                onClick={() => setShowArchive((prev) => !prev)}
+                className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors cursor-pointer whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70 ${
+                  showArchive
+                    ? 'bg-slate-700 text-white'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                {showArchive ? t('hideArchive') : t('showArchive')}
+              </button>
             </div>
 
             {/* Mobile Tab Navigation (Horizontal tabs for phone screens) */}
@@ -519,7 +581,7 @@ function BoardApp() {
             >
               {columns.map((column) => {
                 const isSelected = activeMobileTab === column.id
-                const columnCards = filteredCards.filter((card) => card.columnId === column.id)
+                const columnCards = activeFilteredCards.filter((card) => card.columnId === column.id)
                 const isOver = dragOverColId === column.id
                 return (
                   <button
@@ -562,7 +624,7 @@ function BoardApp() {
               className="flex overflow-x-auto snap-x snap-mandatory gap-3 sm:gap-4 pb-4 px-1 md:grid md:grid-cols-3 md:gap-6 md:overflow-visible md:pb-0 md:px-0 scroll-smooth items-start -mx-2 sm:mx-0"
             >
               {columns.map((column) => {
-                const columnCards = filteredCards.filter((card) => card.columnId === column.id)
+                const columnCards = activeFilteredCards.filter((card) => card.columnId === column.id)
                 const isOver = dragOverColId === column.id
                 const isSelectedOnMobile = activeMobileTab === column.id
 
@@ -595,10 +657,49 @@ function BoardApp() {
                     }}
                     onDeleteCard={setCardToDelete}
                     onMoveCard={moveCard}
+                    onArchiveCard={setCardToArchive}
                   />
                 )
               })}
             </div>
+
+            {showArchive && (
+              <section className="mt-6 bg-white/90 backdrop-blur-sm rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-5">
+                <div className="flex items-center justify-between gap-3 mb-4">
+                  <h2 className="text-sm font-semibold text-slate-900">{t('archiveTitle')}</h2>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-medium">
+                    {archivedFilteredCards.length}
+                  </span>
+                </div>
+
+                {archivedFilteredCards.length === 0 ? (
+                  <div className="text-xs text-slate-500 border border-dashed border-slate-200 rounded-xl p-4 text-center">
+                    {t('archiveEmptyState')}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                    {archivedFilteredCards.map((card) => {
+                      const assignees = getCardAssignees(card)
+
+                      return (
+                        <TaskCard
+                          key={card.id}
+                          card={card}
+                          onClick={() => {
+                            setEditingCard({
+                              ...card,
+                              assignees: assignees.length > 0 ? assignees : [],
+                            })
+                          }}
+                          onDelete={setCardToDelete}
+                          onUnarchive={(selectedCard) => handleUnarchiveCard(selectedCard, 'done')}
+                        />
+                      )
+                    })}
+                  </div>
+                )}
+              </section>
+            )}
           </>
         )}
       </main>
@@ -633,6 +734,24 @@ function BoardApp() {
           onConfirm={(card) => {
             setCardToDelete(null)
             return deleteCard(card.id)
+          }}
+        />
+      )}
+
+      {cardToArchive && (
+        <DeleteTaskDialog
+          card={cardToArchive}
+          icon={Archive}
+          title={t('archiveDialog.title')}
+          warning={t('archiveDialog.warning')}
+          confirmQuestion={t('archiveDialog.confirmQuestion', { title: cardToArchive.title })}
+          confirmLabel={t('archiveTask')}
+          confirmButtonClassName="bg-slate-700 hover:bg-slate-800"
+          iconWrapClassName="bg-slate-100 text-slate-700"
+          onCancel={() => setCardToArchive(null)}
+          onConfirm={(card) => {
+            setCardToArchive(null)
+            return handleArchiveCard(card)
           }}
         />
       )}

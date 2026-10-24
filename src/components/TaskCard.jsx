@@ -1,4 +1,4 @@
-import { Trash2, Calendar, User as UserIcon, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Trash2, Calendar, User as UserIcon, ChevronLeft, ChevronRight, Archive } from 'lucide-react'
 import { useTranslation } from '../i18n'
 import {
   getCardAssignees,
@@ -17,6 +17,8 @@ export default function TaskCard({
   onClick,
   onDelete,
   onMove,
+  onArchive,
+  onUnarchive,
   canMoveLeft = false,
   canMoveRight = false,
 }) {
@@ -110,6 +112,34 @@ export default function TaskCard({
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-center gap-1">
+            {onArchive && card.columnId === 'done' && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onArchive(card)
+                }}
+                className="text-slate-400 hover:text-slate-700 transition-colors p-1 rounded hover:bg-slate-100 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
+                title={t('archiveTask')}
+                aria-label={t('archiveTask')}
+              >
+                <Archive className="w-3.5 h-3.5" />
+              </button>
+            )}
+
+            {onUnarchive && card.columnId === 'archive' && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onUnarchive(card)
+                }}
+                className="text-slate-400 hover:text-slate-700 transition-colors p-1 rounded hover:bg-slate-100 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
+                title={t('unarchiveTask')}
+                aria-label={t('unarchiveTask')}
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </button>
+            )}
+
             {onDelete && (
               <button
                 onClick={(e) => {
