@@ -41,6 +41,10 @@ export default {
   archiveTask: 'Arkivér opgave',
   unarchiveTask: 'Gendan opgave',
   archiveEmptyState: 'Ingen arkiverede opgaver matcher dine nuværende filtre.',
+  archiveYearLabel: 'Arkiveret i {year}',
+  archiveYearUnknown: 'Arkiveret (ukendt år)',
+  collapseArchiveYear: 'Fold {year} sammen',
+  expandArchiveYear: 'Udvid {year}',
 
   // Priorities
   priority: {

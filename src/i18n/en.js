@@ -41,6 +41,10 @@ export default {
   archiveTask: 'Archive task',
   unarchiveTask: 'Restore task',
   archiveEmptyState: 'No archived tasks match your current filters.',
+  archiveYearLabel: 'Archived in {year}',
+  archiveYearUnknown: 'Archived (year unknown)',
+  collapseArchiveYear: 'Collapse {year}',
+  expandArchiveYear: 'Expand {year}',
 
   // Priorities
   priority: {

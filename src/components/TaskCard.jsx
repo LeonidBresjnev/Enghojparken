@@ -1,4 +1,4 @@
-import { Trash2, Calendar, User as UserIcon, ChevronLeft, ChevronRight, Archive } from 'lucide-react'
+import { Trash2, Calendar, User as UserIcon, ChevronLeft, ChevronRight, Archive, Undo2 } from 'lucide-react'
 import { useTranslation } from '../i18n'
 import {
   getCardAssignees,
@@ -136,7 +136,7 @@ export default function TaskCard({
                 title={t('unarchiveTask')}
                 aria-label={t('unarchiveTask')}
               >
-                <ChevronLeft className="w-3.5 h-3.5" />
+                <Undo2 className="w-3.5 h-3.5" />
               </button>
             )}
 

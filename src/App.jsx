@@ -31,7 +31,9 @@ import {
   Users,
   Lock,
   ShieldCheck,
-  Archive
+  Archive,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react'
 
 
@@ -47,6 +49,7 @@ function BoardApp() {
   const [selectedAssignee, setSelectedAssignee] = useState('All')
   const [selectedPriority, setSelectedPriority] = useState('All')
   const [showArchive, setShowArchive] = useState(false)
+  const [expandedArchiveYear, setExpandedArchiveYear] = useState(null)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [editingCard, setEditingCard] = useState(null)
   const [cardToDelete, setCardToDelete] = useState(null)
@@ -124,7 +127,9 @@ function BoardApp() {
       if (user) {
         if (isUserAllowed(user.email)) {
           setCurrentUser(user)
+          setLoadingCards(true)
           setAccessDeniedError('')
+          setFirestoreError(null)
         } else {
           try {
             await signOut(auth)
@@ -132,10 +137,16 @@ function BoardApp() {
             console.error('Error signing out unauthorized user:', e)
           }
           setCurrentUser(null)
+          setCards([])
+          setLoadingCards(false)
+          setFirestoreError(null)
           setAccessDeniedError(`Adgang nægtet: E-mailadressen (${user.email || 'ukendt'}) har ikke tilladelse til at logge ind.`)
         }
       } else {
         setCurrentUser(null)
+        setCards([])
+        setLoadingCards(false)
+        setFirestoreError(null)
       }
       setAuthLoading(false)
     })
@@ -145,14 +156,8 @@ function BoardApp() {
   // Subscribe to real-time updates from Firestore only when user is authenticated
   useEffect(() => {
     if (!currentUser) {
-      setCards([])
-      setLoadingCards(false)
-      setFirestoreError(null)
       return
     }
-
-    setLoadingCards(true)
-    setFirestoreError(null)
 
     const cardsCollection = collection(db, 'cards')
     const cardsQuery = query(cardsCollection, orderBy('createdAt', 'desc'))
@@ -217,6 +222,25 @@ function BoardApp() {
     [filteredCards]
   )
 
+  const archivedCardsByYear = useMemo(() => {
+    const groupedCards = archivedFilteredCards.reduce((acc, card) => {
+      const archivedDate = card.archivedAt?.toDate?.() || card.updatedAt?.toDate?.() || card.createdAt?.toDate?.() || null
+      const year = archivedDate ? String(archivedDate.getFullYear()) : 'Unknown'
+      if (!acc[year]) {
+        acc[year] = []
+      }
+      acc[year].push(card)
+      return acc
+    }, {})
+
+    return Object.entries(groupedCards)
+      .sort(([yearA], [yearB]) => {
+        if (yearA === 'Unknown') return 1
+        if (yearB === 'Unknown') return -1
+        return Number(yearB) - Number(yearA)
+      })
+  }, [archivedFilteredCards])
+
   const moveCard = async (id, direction) => {
     const colOrder = ['todo', 'in_progress', 'done']
     const card = cards.find((c) => c.id === id)
@@ -256,6 +280,7 @@ function BoardApp() {
       const cardRef = doc(db, 'cards', card.id)
       await updateDoc(cardRef, {
         columnId: 'archive',
+        archivedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       })
     } catch (err) {
@@ -677,23 +702,66 @@ function BoardApp() {
                     {t('archiveEmptyState')}
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                    {archivedFilteredCards.map((card) => {
-                      const assignees = getCardAssignees(card)
+                  <div className="space-y-4">
+                    {archivedCardsByYear.map(([year, yearCards]) => {
+                      const isExpanded = expandedArchiveYear === year
+
+                      const yearHeading = year === 'Unknown' ? t('archiveYearUnknown') : t('archiveYearLabel', { year })
 
                       return (
-                        <TaskCard
-                          key={card.id}
-                          card={card}
-                          onClick={() => {
-                            setEditingCard({
-                              ...card,
-                              assignees: assignees.length > 0 ? assignees : [],
-                            })
-                          }}
-                          onDelete={setCardToDelete}
-                          onUnarchive={(selectedCard) => handleUnarchiveCard(selectedCard, 'done')}
-                        />
+                        <section key={year} className="border border-slate-200 rounded-xl bg-white/70 overflow-hidden">
+                          <button
+                            type="button"
+                            onClick={() => setExpandedArchiveYear((prev) => (prev === year ? null : year))}
+                            aria-label={isExpanded ? t('collapseArchiveYear', { year: yearHeading }) : t('expandArchiveYear', { year: yearHeading })}
+                            className="w-full flex items-center justify-between px-3 py-2.5 sm:px-4 text-left hover:bg-slate-50 transition-colors cursor-pointer"
+                          >
+                            <span className="text-sm font-semibold text-slate-900">
+                              {yearHeading}
+                            </span>
+                            <span className="inline-flex items-center gap-2 text-xs text-slate-600 font-medium">
+                              {yearCards.length}
+                              {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                            </span>
+                          </button>
+
+                          <div className="px-3 pb-3 sm:px-4 sm:pb-4">
+                            {isExpanded ? (
+                              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                                {yearCards.map((card) => {
+                                  const assignees = getCardAssignees(card)
+
+                                  return (
+                                    <TaskCard
+                                      key={card.id}
+                                      card={card}
+                                      onClick={() => {
+                                        setEditingCard({
+                                          ...card,
+                                          assignees: assignees.length > 0 ? assignees : [],
+                                        })
+                                      }}
+                                      onDelete={setCardToDelete}
+                                      onUnarchive={(selectedCard) => handleUnarchiveCard(selectedCard, 'done')}
+                                    />
+                                  )
+                                })}
+                              </div>
+                            ) : (
+                              <ul className="space-y-1.5" aria-label={yearHeading}>
+                                {yearCards.map((card) => (
+                                  <li
+                                    key={card.id}
+                                    className="text-xs text-slate-700 bg-slate-50 border border-slate-200 rounded-md px-2.5 py-1.5 truncate"
+                                    title={card.title}
+                                  >
+                                    {card.title}
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        </section>
                       )
                     })}
                   </div>

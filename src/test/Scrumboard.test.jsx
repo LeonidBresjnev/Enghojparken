@@ -712,6 +712,13 @@ describe('Scrumboard Tests with Mock Data', () => {
     await user.click(showArchiveButton)
 
     await waitFor(() => {
+      expect(screen.getByText('Arkiveret (ukendt år)')).toBeInTheDocument()
+      expect(screen.getByText('Bestil havemand til forårsrengøring')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: /udvid arkiveret \(ukendt år\)/i }))
+
+    await waitFor(() => {
       expect(screen.getByText('Bestil havemand til forårsrengøring')).toBeInTheDocument()
     })
 
@@ -722,6 +729,55 @@ describe('Scrumboard Tests with Mock Data', () => {
       expect(screen.queryByRole('button', { name: /gendan opgave/i })).not.toBeInTheDocument()
       expect(screen.getByText('Bestil havemand til forårsrengøring')).toBeInTheDocument()
     })
+  })
+
+  it('keeps archive years collapsed by default and only keeps one year bucket expanded at a time', async () => {
+    const user = userEvent.setup()
+
+    mockCardsData.push(
+      {
+        id: 'archive-2025',
+        title: 'Snerydning vintervagt 2025',
+        description: 'Afsluttet indsats fra vinterberedskab.',
+        columnId: 'archive',
+        assignees: ['Jacob Simonsen'],
+        assignee: 'Jacob Simonsen',
+        priority: 'Medium',
+        dueDate: '2025-01-15',
+        archivedAt: { toDate: () => new Date('2025-02-10T10:00:00Z') },
+      },
+      {
+        id: 'archive-2024',
+        title: 'Snerydning vintervagt 2024',
+        description: 'Afsluttet indsats fra vinterberedskab.',
+        columnId: 'archive',
+        assignees: ['Erik Bjerg'],
+        assignee: 'Erik Bjerg',
+        priority: 'Low',
+        dueDate: '2024-01-15',
+        archivedAt: { toDate: () => new Date('2024-02-10T10:00:00Z') },
+      }
+    )
+
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: /vis arkiv/i }))
+
+    expect(screen.getByText('Arkiveret i 2025')).toBeInTheDocument()
+    expect(screen.getByText('Arkiveret i 2024')).toBeInTheDocument()
+    expect(screen.getByText('Snerydning vintervagt 2025')).toBeInTheDocument()
+    expect(screen.getByText('Snerydning vintervagt 2024')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /gendan opgave/i })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /udvid arkiveret i 2025/i }))
+
+    expect(screen.getByText('Snerydning vintervagt 2025')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /fold arkiveret i 2025 sammen/i })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /udvid arkiveret i 2024/i }))
+
+    expect(screen.getByText('Snerydning vintervagt 2024')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /udvid arkiveret i 2025/i })).toBeInTheDocument()
   })
 
   it('syncs card updates automatically between two simultaneous users', async () => {
@@ -771,6 +827,8 @@ describe('Scrumboard Tests with Mock Data', () => {
       expect(within(clientA.container).getByText('Bestil havemand til forårsrengøring')).toBeInTheDocument()
       expect(within(clientB.container).getByText('Bestil havemand til forårsrengøring')).toBeInTheDocument()
     })
+
+    await userA.click(within(clientA.container).getByRole('button', { name: /udvid arkiveret \(ukendt år\)/i }))
 
     const restoreButtonsA = within(clientA.container).getAllByRole('button', { name: /gendan opgave/i })
     await userA.click(restoreButtonsA[0])
