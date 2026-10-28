@@ -839,4 +839,154 @@ describe('Scrumboard Tests with Mock Data', () => {
       expect(within(clientB.container).getByText('Bestil havemand til forårsrengøring')).toBeInTheDocument()
     })
   })
+
+  it('allows adding sub-tasks with checkboxes when creating a task and displaying them on the board', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: /opret ny opgave/i }))
+
+    await user.type(
+      screen.getByPlaceholderText(/f\.eks\. Klargør regnskab til generalforsamling/i),
+      'Opgave med delopgaver'
+    )
+    await user.type(
+      screen.getByPlaceholderText(/Detaljer om opgaven og hvad der skal gøres\.\.\./i),
+      'Beskrivelse af hovedopgave'
+    )
+
+    const subtaskInput = screen.getByPlaceholderText(/Tilføj en del-opgave\.\.\./i)
+    await user.type(subtaskInput, 'Første del-opgave')
+    await user.click(screen.getByRole('button', { name: /tilføj$/i }))
+
+    await user.type(subtaskInput, 'Anden del-opgave{Enter}')
+
+    expect(screen.getByDisplayValue('Første del-opgave')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('Anden del-opgave')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /tilføj opgave/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Opgave med delopgaver')).toBeInTheDocument()
+      expect(screen.getByText('Første del-opgave')).toBeInTheDocument()
+      expect(screen.getByText('Anden del-opgave')).toBeInTheDocument()
+    })
+
+    const firstSubtaskCheckbox = screen.getByRole('checkbox', { name: /første del-opgave/i })
+    expect(firstSubtaskCheckbox).not.toBeChecked()
+
+    await user.click(firstSubtaskCheckbox)
+
+    await waitFor(() => {
+      expect(firstSubtaskCheckbox).toBeChecked()
+    })
+  })
+
+  it('allows adding, editing, checking, and removing sub-tasks when editing an existing task', async () => {
+    const user = userEvent.setup()
+
+    mockCardsData.push({
+      id: 'card-with-subtasks',
+      title: 'Klargør havemøbler',
+      description: 'Gør terrasse klar til sommer',
+      columnId: 'todo',
+      assignees: ['Jacob Simonsen'],
+      assignee: 'Jacob Simonsen',
+      priority: 'Medium',
+      subtasks: [
+        { id: 'sub-1', title: 'Vask borde og stole', completed: false },
+        { id: 'sub-2', title: 'Giv olie', completed: true },
+      ],
+    })
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Klargør havemøbler')).toBeInTheDocument()
+      expect(screen.getByText('Vask borde og stole')).toBeInTheDocument()
+      expect(screen.getByText('Giv olie')).toBeInTheDocument()
+    })
+
+    // Click on card to open edit modal
+    await user.click(screen.getByText('Klargør havemøbler'))
+
+    const modal = screen.getByRole('dialog')
+    expect(within(modal).getByDisplayValue('Vask borde og stole')).toBeInTheDocument()
+    expect(within(modal).getByDisplayValue('Giv olie')).toBeInTheDocument()
+
+    // Add another subtask
+    const subtaskInput = within(modal).getByPlaceholderText(/Tilføj en del-opgave\.\.\./i)
+    await user.type(subtaskInput, 'Køb nye hynder')
+    await user.click(within(modal).getByRole('button', { name: /tilføj$/i }))
+
+    // Remove the first subtask inside the modal
+    const removeButtons = within(modal).getAllByRole('button', { name: /slet del-opgave|fjern del-opgave/i })
+    await user.click(removeButtons[0])
+
+    await user.click(within(modal).getByRole('button', { name: /gem ændringer/i }))
+
+    await waitFor(() => {
+      expect(screen.queryByText('Vask borde og stole')).not.toBeInTheDocument()
+      expect(screen.getByText('Giv olie')).toBeInTheDocument()
+      expect(screen.getByText('Køb nye hynder')).toBeInTheDocument()
+    })
+  })
+
+  it('allows toggling and deleting sub-tasks directly from board cards', async () => {
+    const user = userEvent.setup()
+
+    mockCardsData.push({
+      id: 'card-with-subtasks-board',
+      title: 'Forbered sommerfest',
+      description: 'Husk følgende til festen',
+      columnId: 'todo',
+      assignees: ['Jacob Simonsen'],
+      assignee: 'Jacob Simonsen',
+      priority: 'High',
+      subtasks: [
+        { id: 'sub-a', title: 'Køb grillkul', completed: false },
+        { id: 'sub-b', title: 'Bestil telt', completed: true },
+        { id: 'sub-c', title: 'Lav spilleliste', completed: false },
+      ],
+    })
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Forbered sommerfest')).toBeInTheDocument()
+      expect(screen.getByText('Husk følgende til festen')).toBeInTheDocument()
+      expect(screen.getByText('Køb grillkul')).toBeInTheDocument()
+      expect(screen.getByText('Bestil telt')).toBeInTheDocument()
+      expect(screen.getByText('Lav spilleliste')).toBeInTheDocument()
+    })
+
+    // Checkbox for "Køb grillkul" should be unchecked, "Bestil telt" should be checked
+    const grillCheckbox = screen.getByRole('checkbox', { name: /køb grillkul/i })
+    const tentCheckbox = screen.getByRole('checkbox', { name: /bestil telt/i })
+    expect(grillCheckbox).not.toBeChecked()
+    expect(tentCheckbox).toBeChecked()
+
+    // Counter "1/3" should appear exactly once on the card (in the subtask header)
+    //const cardEl = screen.getByText('Forbered sommerfest').closest('div')
+    expect(screen.getAllByText('1/3').length).toBe(1)
+
+    // Toggle "Køb grillkul"
+    await user.click(grillCheckbox)
+    await waitFor(() => {
+      expect(grillCheckbox).toBeChecked()
+    })
+
+    // After toggling, counter updates to "2/3" and appears exactly once
+    expect(screen.getAllByText('2/3').length).toBe(1)
+
+    // Delete "Lav spilleliste" using the delete icon
+    const deleteButtons = screen.getAllByRole('button', { name: /slet del-opgave/i })
+    await user.click(deleteButtons[2])
+
+    await waitFor(() => {
+      expect(screen.queryByText('Lav spilleliste')).not.toBeInTheDocument()
+      expect(screen.getByText('Køb grillkul')).toBeInTheDocument()
+      expect(screen.getByText('Bestil telt')).toBeInTheDocument()
+    })
+  })
 })

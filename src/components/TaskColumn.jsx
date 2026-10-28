@@ -19,6 +19,8 @@ export default function TaskColumn({
   onDeleteCard,
   onMoveCard,
   onArchiveCard,
+  onToggleSubtask,
+  onDeleteSubtask,
 }) {
   const { t } = useTranslation()
 
@@ -95,6 +97,8 @@ export default function TaskColumn({
                   onDelete={onDeleteCard}
                   onMove={onMoveCard}
                   onArchive={onArchiveCard}
+                  onToggleSubtask={onToggleSubtask}
+                  onDeleteSubtask={onDeleteSubtask}
                   canMoveLeft={currentIndex > 0}
                   canMoveRight={currentIndex < columnOrder.length - 1}
                 />

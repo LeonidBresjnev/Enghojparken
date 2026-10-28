@@ -22,7 +22,10 @@ import TaskColumn from './components/TaskColumn'
 import TaskCard from './components/TaskCard'
 import TaskFormModal from './components/TaskFormModal'
 import DeleteTaskDialog from './components/DeleteTaskDialog'
-import { getCardAssignees, normalizePriority } from './utils/cardUtils'
+import {
+  getCardAssignees,
+  normalizePriority
+} from './utils/cardUtils'
 import {
   User as UserIcon,
   LogIn,
@@ -104,6 +107,7 @@ function BoardApp() {
   const [newCard, setNewCard] = useState({
     title: '',
     description: '',
+    subtasks: [],
     columnId: 'todo',
     assignees: [],
     priority: 'Medium',
@@ -273,6 +277,40 @@ function BoardApp() {
     }
   }
 
+  const handleToggleSubtask = async (card, subtaskId) => {
+    if (!card) return
+    const currentSubtasks = Array.isArray(card.subtasks) ? card.subtasks : []
+    const updatedSubtasks = currentSubtasks.map((st) =>
+      st.id === subtaskId ? { ...st, completed: !st.completed } : st
+    )
+
+    try {
+      const cardRef = doc(db, 'cards', card.id)
+      await updateDoc(cardRef, {
+        subtasks: updatedSubtasks,
+        updatedAt: serverTimestamp(),
+      })
+    } catch (err) {
+      console.error('Error toggling subtask:', err)
+    }
+  }
+
+  const handleDeleteSubtask = async (card, subtaskId) => {
+    if (!card) return
+    const currentSubtasks = Array.isArray(card.subtasks) ? card.subtasks : []
+    const updatedSubtasks = currentSubtasks.filter((st) => st.id !== subtaskId)
+
+    try {
+      const cardRef = doc(db, 'cards', card.id)
+      await updateDoc(cardRef, {
+        subtasks: updatedSubtasks,
+        updatedAt: serverTimestamp(),
+      })
+    } catch (err) {
+      console.error('Error deleting subtask:', err)
+    }
+  }
+
   const handleArchiveCard = async (card) => {
     if (!card || card.columnId !== 'done') return
 
@@ -313,6 +351,7 @@ function BoardApp() {
       const cardData = {
         title: newCard.title.trim(),
         description: newCard.description.trim() || '',
+        subtasks: Array.isArray(newCard.subtasks) ? newCard.subtasks : [],
         columnId: newCard.columnId || 'todo',
         assignees: selectedAssignees,
         assignee: assigneeString, // maintain backwards compatibility
@@ -327,6 +366,7 @@ function BoardApp() {
       setNewCard({
         title: '',
         description: '',
+        subtasks: [],
         columnId: 'todo',
         assignees: [],
         priority: 'Medium',
@@ -353,6 +393,7 @@ function BoardApp() {
       await updateDoc(cardRef, {
         title: editingCard.title.trim(),
         description: editingCard.description?.trim() || '',
+        subtasks: Array.isArray(editingCard.subtasks) ? editingCard.subtasks : [],
         columnId: editingCard.columnId || 'todo',
         assignees: selectedAssignees,
         assignee: assigneeString, // maintain backwards compatibility
@@ -420,6 +461,7 @@ function BoardApp() {
     setNewCard({
       title: '',
       description: '',
+      subtasks: [],
       columnId: 'todo',
       assignees: [],
       priority: 'Medium',
@@ -678,11 +720,14 @@ function BoardApp() {
                       setEditingCard({
                         ...card,
                         assignees: assignees.length > 0 ? assignees : [],
+                        subtasks: Array.isArray(card.subtasks) ? card.subtasks : [],
                       })
                     }}
                     onDeleteCard={setCardToDelete}
                     onMoveCard={moveCard}
                     onArchiveCard={setCardToArchive}
+                    onToggleSubtask={handleToggleSubtask}
+                    onDeleteSubtask={handleDeleteSubtask}
                   />
                 )
               })}
@@ -739,10 +784,13 @@ function BoardApp() {
                                         setEditingCard({
                                           ...card,
                                           assignees: assignees.length > 0 ? assignees : [],
+                                          subtasks: Array.isArray(card.subtasks) ? card.subtasks : [],
                                         })
                                       }}
                                       onDelete={setCardToDelete}
                                       onUnarchive={(selectedCard) => handleUnarchiveCard(selectedCard, 'done')}
+                                      onToggleSubtask={handleToggleSubtask}
+                                      onDeleteSubtask={handleDeleteSubtask}
                                     />
                                   )
                                 })}

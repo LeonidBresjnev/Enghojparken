@@ -19,6 +19,8 @@ export default function TaskCard({
   onMove,
   onArchive,
   onUnarchive,
+  onToggleSubtask,
+  onDeleteSubtask,
   canMoveLeft = false,
   canMoveRight = false,
 }) {
@@ -33,6 +35,9 @@ export default function TaskCard({
   }
 
   const assignees = getCardAssignees(card)
+  const subtasks = Array.isArray(card.subtasks) ? card.subtasks : []
+  const totalSubtasks = subtasks.length
+  const completedSubtasks = subtasks.filter((s) => s.completed).length
 
   if (isCollapsed) {
     return (
@@ -50,6 +55,11 @@ export default function TaskCard({
         <h3 className="font-semibold text-slate-900 text-sm leading-snug group-hover:text-sky-700 transition-colors flex-1 min-w-0 truncate">
           {card.title}
         </h3>
+        {totalSubtasks > 0 && (
+          <span className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded font-medium shrink-0 ml-2">
+            {completedSubtasks}/{totalSubtasks}
+          </span>
+        )}
       </div>
     )
   }
@@ -77,6 +87,55 @@ export default function TaskCard({
         <p className="text-xs text-slate-600 line-clamp-3 leading-relaxed break-words whitespace-pre-line">
           {renderDescriptionWithLinks(card.description)}
         </p>
+      )}
+
+      {subtasks.length > 0 && (
+        <div className="flex flex-col gap-1.5 pt-1">
+          <div className="flex items-center justify-between text-[11px] font-semibold text-slate-500">
+            <span>{t('task.subtasks')}</span>
+            <span>
+              {completedSubtasks}/{totalSubtasks}
+            </span>
+          </div>
+          <div className="flex flex-col gap-1 max-h-36 overflow-y-auto overflow-x-hidden">
+            {subtasks.map((st) => (
+              <div
+                key={st.id}
+                onClick={(e) => e.stopPropagation()}
+                className="flex items-start justify-between gap-2 group/st hover:bg-slate-50/80 px-1 py-0.5 rounded transition-colors"
+              >
+                <label className="flex items-start gap-2 text-xs text-slate-700 hover:text-slate-900 cursor-pointer select-none flex-1 min-w-0">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(st.completed)}
+                    onChange={() => onToggleSubtask?.(card, st.id)}
+                    aria-label={st.title || st.text || t('task.subtasks')}
+                    className="mt-0.5 w-3.5 h-3.5 text-sky-600 rounded border-slate-300 focus:ring-sky-500 cursor-pointer shrink-0"
+                  />
+                  <span
+                    className={`leading-snug break-words [overflow-wrap:anywhere] flex-1 min-w-0 ${
+                      st.completed ? 'line-through text-slate-400 group-hover/st:text-slate-500' : ''
+                    }`}
+                  >
+                    {renderDescriptionWithLinks(st.title || st.text || '')}
+                  </span>
+                </label>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onDeleteSubtask?.(card, st.id)
+                  }}
+                  title={t('task.deleteSubtask')}
+                  aria-label={t('task.deleteSubtask')}
+                  className="text-slate-300 hover:text-red-500 p-0.5 rounded transition-colors opacity-0 group-hover/st:opacity-100 focus:opacity-100 cursor-pointer shrink-0"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       <div className="pt-2 border-t border-slate-100 flex flex-col gap-2 text-xs text-slate-500">
